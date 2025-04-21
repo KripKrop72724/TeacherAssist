@@ -1,0 +1,52 @@
+# Byte‑compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Django migrations
+**/migrations/
+!**/migrations/__init__.py
+
+# Environment variables
+.env
+.env.*
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# PyCharm
+.idea/
+
+# VS Code
+.vscode/
+
+# macOS files
+.DS_Store
+
+# Windows files
+Thumbs.db
+ehthumbs.db
+
+# Logs and databases
+*.log
+*.sqlite3
+db.sqlite3
+
+# Coverage and test artifacts
+.coverage
+htmlcov/
+.noseids
+.pytest_cache/
+
+# Static files collected
+staticfiles/
+
+# node modules, if any
+node_modules/
+
+# Build directories
+build/
+dist/
