@@ -1,5 +1,5 @@
 import re
-
+import auth.openapi
 from django.conf import settings
 from django.core.management import call_command
 from django.db import transaction
@@ -10,10 +10,35 @@ from rest_framework.response import Response
 from rest_framework_simplejwt.exceptions import TokenError, InvalidToken
 from rest_framework_simplejwt.serializers import (TokenObtainPairSerializer,TokenRefreshSerializer)
 from rest_framework_simplejwt.tokens import RefreshToken
+from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiResponse
 
 from auth.authentication import CookieJWTAuthentication
+from auth.serializers import LoginSerializer, RefreshSerializer, LogoutSerializer, TenantCreateSerializer, \
+    TenantCreateResponseSerializer
 from tenants.models import Tenant, Domain
 
+@extend_schema_view(
+    login=extend_schema(
+        summary="Obtain JWT tokens",
+        request=LoginSerializer,
+        responses={200: OpenApiResponse(response=LoginSerializer, description="Returns access & refresh tokens")},
+    ),
+    refresh=extend_schema(
+        summary="Refresh access token",
+        request=RefreshSerializer,
+        responses={200: OpenApiResponse(response=RefreshSerializer, description="Returns new access token")},
+    ),
+    logout=extend_schema(
+        summary="Logout & blacklist refresh token",
+        request=LogoutSerializer,
+        responses={200: None},
+    ),
+    create_tenant=extend_schema(
+        summary="Onboard a new tenant",
+        request=TenantCreateSerializer,
+        responses={201: TenantCreateResponseSerializer},
+    ),
+)
 
 class AuthViewSet(viewsets.GenericViewSet):
     """

@@ -93,9 +93,11 @@ REST_FRAMEWORK = {
 }
 
 SPECTACULAR_SETTINGS = {
-  'TITLE': 'TeacherAssist Backend APIs',
+  'TITLE': 'TeacherAssist API',
   'VERSION': 'v1',
   'DESCRIPTION': 'SaaS based platform to do AI processing on books and documents especially curated for teachers',
+  'SERVE_INCLUDE_SCHEMA': False,
+  'SECURITY': [{"cookieJWT": []}],
 }
 
 SIMPLE_JWT = {
@@ -112,7 +114,7 @@ SIMPLE_JWT = {
 
     # cookie settings
     'AUTH_COOKIE':         'access_token',
-    'AUTH_COOKIE_SECURE':   env("AUTH_COOKIE_SECURE"),     # only over HTTPS so set true in production
+    'AUTH_COOKIE_SECURE':   env("AUTH_COOKIE_SECURE", default=True),     # only over HTTPS so set true in production
     'AUTH_COOKIE_HTTP_ONLY': True,    # JS access blocked
     'AUTH_COOKIE_SAMESITE': 'Lax',
 
