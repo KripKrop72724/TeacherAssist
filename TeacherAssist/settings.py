@@ -29,7 +29,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-d4e&kl%)&h@-zq+h0^ejx8n4v158@9%pi&=-=*2i3x^kh9k3yx'
+SECRET_KEY = env.str('SECRET_KEY')
 
 STATIC_URL = 'static/'
 
@@ -113,8 +113,8 @@ SIMPLE_JWT = {
     'AUTH_HEADER_TYPES': ('Bearer',),
 
     # cookie settings
-    'AUTH_COOKIE':         'access_token',
-    'AUTH_COOKIE_SECURE':   env("AUTH_COOKIE_SECURE", default=True),     # only over HTTPS so set true in production
+    'AUTH_COOKIE': 'access_token',
+    'AUTH_COOKIE_SECURE': env("AUTH_COOKIE_SECURE", default=True),     # only over HTTPS so set true in production
     'AUTH_COOKIE_HTTP_ONLY': True,    # JS access blocked
     'AUTH_COOKIE_SAMESITE': 'Lax',
 
