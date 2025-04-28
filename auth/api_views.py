@@ -12,7 +12,7 @@ from rest_framework.response import Response
 from rest_framework_simplejwt.exceptions import TokenError, InvalidToken
 from rest_framework_simplejwt.serializers import (TokenObtainPairSerializer,TokenRefreshSerializer)
 from rest_framework_simplejwt.tokens import RefreshToken
-from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiResponse
+from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiResponse, OpenApiParameter
 
 from auth.authentication import CookieJWTAuthentication
 from auth.serializers import LoginSerializer, RefreshSerializer, LogoutSerializer, TenantCreateSerializer, \
@@ -67,29 +67,27 @@ from tenants.models import Tenant, Domain
             429: OpenApiResponse(description="Rate limit exceeded."),
             500: OpenApiResponse(description="Internal error during creation or migration."),
         },
-        throttle_scope="tenant_creation",
     ),
     check_tenant=extend_schema(
         summary="Check tenant availability",
         description=(
-            "Returns whether a subdomain is available. "
-            "Intended for front-end debounced checks."
+                "Returns whether a subdomain is available. "
+                "Intended for front-end debounced checks."
         ),
         parameters=[
-            {
-                "name": "subdomain",
-                "in": "query",
-                "required": True,
-                "schema": {"type": "string"},
-                "description": "Proposed tenant subdomain to check."
-            }
+            OpenApiParameter(
+                name="subdomain",
+                type=str,
+                location=OpenApiParameter.QUERY,
+                required=True,
+                description="Proposed tenant subdomain to check."
+            )
         ],
         responses={
             200: CheckTenantSerializer,
             400: OpenApiResponse(description="Missing or invalid subdomain parameter."),
             429: OpenApiResponse(description="Rate limit exceeded."),
         },
-        throttle_scope="tenant_check",
     ),
 )
 
