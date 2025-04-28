@@ -53,19 +53,16 @@ from tenants.models import Tenant, Domain
     create_tenant=extend_schema(
         summary="Onboard a new tenant",
         description=(
-            "Create a new database schema and domain for a tenant. "
-            "Validates recaptcha, enforces reserved names, and runs migrations atomically."
+            "Creates a new schema and domain. "
+            "Requires `subdomain` and a `recaptcha_token` from Google reCAPTCHA v3."
         ),
         request=TenantCreateSerializer,
         responses={
-            201: OpenApiResponse(
-                response=TenantCreateResponseSerializer,
-                description="Returns `{message, schema, domain}`"
-            ),
-            400: OpenApiResponse(description="Validation error or recaptcha failure."),
-            409: OpenApiResponse(description="Tenant or domain already exists."),
-            429: OpenApiResponse(description="Rate limit exceeded."),
-            500: OpenApiResponse(description="Internal error during creation or migration."),
+            201: TenantCreateResponseSerializer,
+            400: OpenApiResponse(description="Validation or reCAPTCHA failure"),
+            409: OpenApiResponse(description="Subdomain already exists"),
+            429: OpenApiResponse(description="Rate limit exceeded"),
+            500: OpenApiResponse(description="Internal error"),
         },
     ),
     check_tenant=extend_schema(

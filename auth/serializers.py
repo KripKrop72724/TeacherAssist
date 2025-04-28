@@ -13,14 +13,16 @@ class RefreshSerializer(TokenRefreshSerializer):
     pass
 
 class LogoutSerializer(serializers.Serializer):
-    # no input body
     pass
 
 class TenantCreateSerializer(serializers.Serializer):
-    subdomain = serializers.RegexField(
-        regex=r'^[a-zA-Z0-9]+$',
+    subdomain        = serializers.RegexField(
+        regex=r'^[A-Za-z0-9]{1,50}$',
         max_length=50,
-        help_text="Alphanumeric, max 50 chars"
+        help_text="1–50 alphanumeric characters",
+    )
+    recaptcha_token  = serializers.CharField(
+        help_text="Google reCAPTCHA v3 token from client"
     )
 
 class TenantCreateResponseSerializer(serializers.Serializer):
