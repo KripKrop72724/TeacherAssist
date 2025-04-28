@@ -27,3 +27,8 @@ class TenantCreateResponseSerializer(serializers.Serializer):
     message = serializers.CharField()
     schema  = serializers.CharField()
     domain  = serializers.CharField()
+
+
+class CheckTenantSerializer(serializers.Serializer):
+    available = serializers.BooleanField()
+    reason    = serializers.CharField(required=False, allow_blank=True)

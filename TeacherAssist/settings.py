@@ -89,6 +89,10 @@ REST_FRAMEWORK = {
         'drf_spectacular.openapi.AutoSchema'
     ),
     'DEFAULT_PAGINATION_CLASS': 'auth.pagination.CustomPageNumberPagination',
+    "DEFAULT_THROTTLE_RATES": {
+        "tenant_creation": "5/hour",
+        "tenant_check":    "1000/hour",
+    },
     'PAGE_SIZE': 30,
 }
 
