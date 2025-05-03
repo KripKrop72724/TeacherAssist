@@ -16,6 +16,7 @@ from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiResp
 from auth.authentication import CookieJWTAuthentication
 from auth.serializers import LoginSerializer, RefreshSerializer, LogoutSerializer, TenantCreateSerializer, \
     TenantCreateResponseSerializer, CheckTenantSerializer
+from auth.throttles import ConditionalScopeThrottle
 from tenants.models import Tenant, Domain
 
 @extend_schema_view(
@@ -96,7 +97,7 @@ class AuthViewSet(viewsets.GenericViewSet):
     """
     authentication_classes = [CookieJWTAuthentication]
     permission_classes     = [AllowAny]
-    throttle_classes       = [ScopedRateThrottle]
+    throttle_classes       = [ConditionalScopeThrottle]
 
     @action(detail=False, methods=["post"], permission_classes=[AllowAny])
     def login(self, request):
@@ -174,7 +175,7 @@ class AuthViewSet(viewsets.GenericViewSet):
         resp.delete_cookie(settings.SIMPLE_JWT["REFRESH_COOKIE"], path="/")
         return resp
 
-    @action(detail=False, methods=["get"], permission_classes=[AllowAny])
+    @action(detail=False, methods=["get"], permission_classes=[AllowAny], throttle_scope="tenant_check")
     def check_tenant(self, request):
         sub = request.query_params.get("subdomain", "").strip().lower()
         reserved = {n.lower() for n in settings.RESERVED_SUBDOMAINS}
@@ -200,7 +201,7 @@ class AuthViewSet(viewsets.GenericViewSet):
 
         return Response({"available": True}, status=status.HTTP_200_OK)
 
-    @action(detail=False, methods=["post"], permission_classes=[AllowAny])
+    @action(detail=False, methods=["post"], permission_classes=[AllowAny], throttle_scope="tenant_creation")
     def create_tenant(self, request):
         sub = (request.data.get("subdomain") or "").strip().lower()
         reserved = {n.lower() for n in settings.RESERVED_SUBDOMAINS}
@@ -215,27 +216,26 @@ class AuthViewSet(viewsets.GenericViewSet):
             return Response({"error": "1–50 alphanumeric chars only."},
                             status=status.HTTP_400_BAD_REQUEST)
 
-        recaptcha = request.data.get("recaptcha_token")
-        if not recaptcha:
-            return Response({"error": "recaptcha_token is required."},
-                            status=status.HTTP_400_BAD_REQUEST)
-        try:
-            rec_r = requests.post(
-                "https://www.google.com/recaptcha/api/siteverify",
-                data={
-                    "secret":   settings.RECAPTCHA_SECRET_KEY,
-                    "response": recaptcha,
-                },
-                timeout=5,
-            ).json()
-        except requests.RequestException as e:
-            return Response({"error": "Recaptcha service unavailable.",
-                             "details": str(e)},
-                            status=status.HTTP_503_SERVICE_UNAVAILABLE)
-
-        if not rec_r.get("success") or rec_r.get("score", 0) < 0.5:
-            return Response({"error": "Recaptcha validation failed."},
-                            status=status.HTTP_400_BAD_REQUEST)
+        if settings.TENANT_CREATION_REQUIRE_CAPTCHA:
+            recaptcha = request.data.get("recaptcha_token")
+            if not recaptcha:
+                return Response({"error": "recaptcha_token is required."}, status=400)
+            try:
+                rec_r = requests.post(
+                    "https://www.google.com/recaptcha/api/siteverify",
+                    data={
+                        "secret":   settings.RECAPTCHA_SECRET_KEY,
+                        "response": recaptcha,
+                    },
+                    timeout=5,
+                ).json()
+            except requests.RequestException as e:
+                return Response(
+                    {"error":"Recaptcha service unavailable.","details":str(e)},
+                    status=503
+                )
+            if not rec_r.get("success") or rec_r.get("score", 0) < 0.5:
+                return Response({"error":"Recaptcha validation failed."}, status=400)
 
         domain = f"{sub}.{settings.TENANT_SUBDOMAIN_BASE}"
         if Tenant.objects.filter(schema_name=sub).exists() or Domain.objects.filter(domain=domain).exists():
