@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 from pathlib import Path
 from datetime import timedelta
 import environ
+import re
 
 env = environ.Env(
     DEBUG=(bool, False)
@@ -40,14 +41,13 @@ DEBUG = env.bool("DEBUG", default=False)
 RESERVED_SUBDOMAINS = env.list("RESERVED_SUBDOMAINS", default=["admin", "public", "www", "api"])
 
 CORS_ALLOW_CREDENTIALS = True
-ALLOWED_HOSTS = env.list("ALLOWED_HOSTS")
 SITE_DOMAIN = env("SITE_DOMAIN")
-CORS_ALLOWED_ORIGINS = env.list("CORS_ALLOWED_ORIGINS")
-CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS")
-
+ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=[f".{SITE_DOMAIN}"])
+CORS_ALLOWED_ORIGIN_REGEXES = env.list("CORS_ALLOWED_ORIGIN_REGEXES", default=[rf"^https://[a-zA-Z0-9-]+\.{re.escape(SITE_DOMAIN)}$",])
 TENANT_SUBDOMAIN_BASE = env.str("TENANT_SUBDOMAIN_BASE", SITE_DOMAIN)
+CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS",default=[f"https://*.{SITE_DOMAIN}",f"https://*.{TENANT_SUBDOMAIN_BASE}"])
 
-# Application definition
+
 SHARED_APPS = [
     "django_tenants",
     "tenants",
@@ -88,6 +88,9 @@ REST_FRAMEWORK = {
     'DEFAULT_SCHEMA_CLASS' : (
         'drf_spectacular.openapi.AutoSchema'
     ),
+    "DEFAULT_THROTTLE_CLASSES": (
+        "rest_framework.throttling.ScopedRateThrottle",
+    ),
     'DEFAULT_PAGINATION_CLASS': 'auth.pagination.CustomPageNumberPagination',
     "DEFAULT_THROTTLE_RATES": {
         "tenant_creation": "5/hour",
@@ -118,11 +121,10 @@ SIMPLE_JWT = {
 
     # cookie settings
     'AUTH_COOKIE': 'access_token',
-    'AUTH_COOKIE_SECURE': env("AUTH_COOKIE_SECURE", default=True),     # only over HTTPS so set true in production
-    'AUTH_COOKIE_HTTP_ONLY': True,    # JS access blocked
+    'AUTH_COOKIE_SECURE': env.bool("AUTH_COOKIE_SECURE", default=True),
+    'AUTH_COOKIE_HTTP_ONLY': True,
     'AUTH_COOKIE_SAMESITE': 'Lax',
-
-    'REFRESH_COOKIE':         'refresh_token',
+    'REFRESH_COOKIE': 'refresh_token',
     'REFRESH_COOKIE_SECURE':   True,
     'REFRESH_COOKIE_HTTP_ONLY': True,
     'REFRESH_COOKIE_SAMESITE': 'Lax',

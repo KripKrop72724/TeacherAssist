@@ -13,7 +13,6 @@ from rest_framework_simplejwt.exceptions import TokenError, InvalidToken
 from rest_framework_simplejwt.serializers import (TokenObtainPairSerializer,TokenRefreshSerializer)
 from rest_framework_simplejwt.tokens import RefreshToken
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiResponse, OpenApiParameter
-
 from auth.authentication import CookieJWTAuthentication
 from auth.serializers import LoginSerializer, RefreshSerializer, LogoutSerializer, TenantCreateSerializer, \
     TenantCreateResponseSerializer, CheckTenantSerializer
