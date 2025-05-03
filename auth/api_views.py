@@ -75,7 +75,7 @@ from tenants.models import Tenant, Domain
             OpenApiParameter(
                 name="subdomain",
                 type=str,
-                location=OpenApiParameter.QUERY,
+                location="query",
                 required=True,
                 description="Proposed tenant subdomain to check."
             )
