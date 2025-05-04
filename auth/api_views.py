@@ -120,24 +120,27 @@ class AuthViewSet(viewsets.GenericViewSet):
             serializer.validated_data["refresh"],
         )
 
-        resp = Response({_("access"): access, _("refresh"): refresh},
-                        status=status.HTTP_200_OK)
-        # set cookies site-wide
-        for name, token, lifetime in (
-            (settings.SIMPLE_JWT["AUTH_COOKIE"], access,
-             settings.SIMPLE_JWT["ACCESS_TOKEN_LIFETIME"]),
-            (settings.SIMPLE_JWT["REFRESH_COOKIE"], refresh,
-             settings.SIMPLE_JWT["REFRESH_TOKEN_LIFETIME"]),
-        ):
+        resp = Response({"access": access}, status=status.HTTP_200_OK)
+        cookie_config = [
+            ("AUTH_COOKIE", "ACCESS_TOKEN_LIFETIME", access),
+            ("REFRESH_COOKIE", "REFRESH_TOKEN_LIFETIME", refresh),
+        ]
+
+        for cookie_key, lifetime_key, token in cookie_config:
+            cookie_name = settings.SIMPLE_JWT[cookie_key]
+            lifetime = settings.SIMPLE_JWT[lifetime_key]
+
             resp.set_cookie(
-                name,
+                cookie_name,
                 token,
+                domain=settings.COOKIE_DOMAIN,
                 path="/",
                 max_age=int(lifetime.total_seconds()),
-                secure=settings.SIMPLE_JWT[f"{name.upper()}_SECURE"],
-                httponly=settings.SIMPLE_JWT[f"{name.upper()}_HTTP_ONLY"],
-                samesite=settings.SIMPLE_JWT[f"{name.upper()}_SAMESITE"],
+                secure=settings.SIMPLE_JWT[f"{cookie_key}_SECURE"],
+                httponly=settings.SIMPLE_JWT[f"{cookie_key}_HTTP_ONLY"],
+                samesite=settings.SIMPLE_JWT[f"{cookie_key}_SAMESITE"],
             )
+
         return resp
 
     @action(detail=False, methods=["post"], permission_classes=[AllowAny])

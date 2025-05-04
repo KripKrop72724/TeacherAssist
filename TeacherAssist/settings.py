@@ -46,6 +46,7 @@ ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=[f".{SITE_DOMAIN}"])
 CORS_ALLOWED_ORIGIN_REGEXES = env.list("CORS_ALLOWED_ORIGIN_REGEXES", default=[rf"^https://[a-zA-Z0-9-]+\.{re.escape(SITE_DOMAIN)}$",])
 TENANT_SUBDOMAIN_BASE = env.str("TENANT_SUBDOMAIN_BASE", SITE_DOMAIN)
 CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS",default=[f"https://*.{SITE_DOMAIN}",f"https://*.{TENANT_SUBDOMAIN_BASE}"])
+COOKIE_DOMAIN = env.str("COOKIE_DOMAIN", default=f".{SITE_DOMAIN}")
 
 TENANT_CREATION_REQUIRE_CAPTCHA   = env.bool("TENANT_CREATION_REQUIRE_CAPTCHA",   default=True)
 TENANT_CREATION_THROTTLE_ENABLED  = env.bool("TENANT_CREATION_THROTTLE_ENABLED",  default=True)
@@ -99,7 +100,7 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_RATES": {
         "tenant_creation": "5/hour",
         "tenant_check"   : "1000/hour",
-        "register"       : "30/hour",
+        "register"       : "20/hour",
     },
     'PAGE_SIZE': 30,
 }
