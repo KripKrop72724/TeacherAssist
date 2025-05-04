@@ -120,19 +120,20 @@ class AuthViewSet(viewsets.GenericViewSet):
             serializer.validated_data["refresh"],
         )
 
-        resp = Response({"access": access}, status=status.HTTP_200_OK)
+        resp = Response(status=status.HTTP_204_NO_CONTENT)
+
         cookie_config = [
             ("AUTH_COOKIE", "ACCESS_TOKEN_LIFETIME", access),
             ("REFRESH_COOKIE", "REFRESH_TOKEN_LIFETIME", refresh),
         ]
 
         for cookie_key, lifetime_key, token in cookie_config:
-            cookie_name = settings.SIMPLE_JWT[cookie_key]
+            name = settings.SIMPLE_JWT[cookie_key]
             lifetime = settings.SIMPLE_JWT[lifetime_key]
 
             resp.set_cookie(
-                cookie_name,
-                token,
+                key=name,
+                value=token,
                 domain=settings.COOKIE_DOMAIN,
                 path="/",
                 max_age=int(lifetime.total_seconds()),
