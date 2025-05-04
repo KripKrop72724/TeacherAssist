@@ -15,9 +15,10 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiResponse, OpenApiParameter
 from auth.authentication import CookieJWTAuthentication
 from auth.serializers import LoginSerializer, RefreshSerializer, LogoutSerializer, TenantCreateSerializer, \
-    TenantCreateResponseSerializer, CheckTenantSerializer
+    TenantCreateResponseSerializer, CheckTenantSerializer, UserRegisterSerializer, UserDetailSerializer
 from auth.throttles import ConditionalScopeThrottle
 from tenants.models import Tenant, Domain
+from django.utils.translation import gettext_lazy as _
 
 @extend_schema_view(
     login=extend_schema(
@@ -86,6 +87,16 @@ from tenants.models import Tenant, Domain
             429: OpenApiResponse(description="Rate limit exceeded."),
         },
     ),
+    register=extend_schema(
+        summary="Register a new user/login",
+        description="Creates a new user in the current tenant schema.",
+        request=UserRegisterSerializer,
+        responses={
+            201: OpenApiResponse(response=UserDetailSerializer, description="User created"),
+            400: OpenApiResponse(description="Validation error"),
+            429: OpenApiResponse(description="Rate limit exceeded"),
+        },
+    )
 )
 
 class AuthViewSet(viewsets.GenericViewSet):
@@ -94,6 +105,7 @@ class AuthViewSet(viewsets.GenericViewSet):
     - POST /auth/refresh/       → rotate access_token cookie
     - POST /auth/logout/        → blacklist + clear cookies
     - POST /auth/create_tenant/ → onboard a new tenant (atomic)
+    - POST /auth/register/      → register a login user for any tenant
     """
     authentication_classes = [CookieJWTAuthentication]
     permission_classes     = [AllowAny]
@@ -108,7 +120,7 @@ class AuthViewSet(viewsets.GenericViewSet):
             serializer.validated_data["refresh"],
         )
 
-        resp = Response({"access": access, "refresh": refresh},
+        resp = Response({_("access"): access, _("refresh"): refresh},
                         status=status.HTTP_200_OK)
         # set cookies site-wide
         for name, token, lifetime in (
@@ -135,18 +147,18 @@ class AuthViewSet(viewsets.GenericViewSet):
             or request.COOKIES.get(settings.SIMPLE_JWT["REFRESH_COOKIE"])
         )
         if not refresh_token:
-            return Response({"error": "No refresh token provided."},
+            return Response({_("error"): _("No refresh token provided.")},
                             status=status.HTTP_400_BAD_REQUEST)
 
         serializer = TokenRefreshSerializer(data={"refresh": refresh_token})
         try:
             serializer.is_valid(raise_exception=True)
         except TokenError as e:
-            return Response({"error": "Invalid refresh token.", "details": str(e)},
+            return Response({_("error"): _("Invalid refresh token."), _("details"): str(e)},
                             status=status.HTTP_401_UNAUTHORIZED)
 
         access  = serializer.validated_data["access"]
-        data    = {"access": access}
+        data    = {_("access"): access}
         new_ref = serializer.validated_data.get("refresh")
         if new_ref:
             data["refresh"] = new_ref
@@ -177,15 +189,15 @@ class AuthViewSet(viewsets.GenericViewSet):
     def logout(self, request):
         token = request.COOKIES.get(settings.SIMPLE_JWT["REFRESH_COOKIE"])
         if not token:
-            return Response({"error": "No refresh token in cookies."},
+            return Response({_("error"): _("No refresh token in cookies.")},
                             status=status.HTTP_400_BAD_REQUEST)
         try:
             RefreshToken(token).blacklist()
         except TokenError as e:
-            return Response({"error": "Failed to blacklist token.", "details": str(e)},
+            return Response({_("error"): _("Failed to blacklist token."), _("details"): _(str(e))},
                             status=status.HTTP_400_BAD_REQUEST)
 
-        resp = Response({"detail": "Logged out."}, status=status.HTTP_200_OK)
+        resp = Response({_("detail"): _("Logged out.")}, status=status.HTTP_200_OK)
         resp.delete_cookie(settings.SIMPLE_JWT["AUTH_COOKIE"], path="/")
         resp.delete_cookie(settings.SIMPLE_JWT["REFRESH_COOKIE"], path="/")
         return resp
@@ -197,24 +209,24 @@ class AuthViewSet(viewsets.GenericViewSet):
 
         if not sub:
             return Response(
-                {"available": False,
-                 "reason": "Subdomain parameter is required."},
+                {_("available"): False,
+                 _("reason"): _("Subdomain parameter is required.")},
                 status=status.HTTP_400_BAD_REQUEST
             )
         if sub in reserved:
-            return Response({"available": False, "reason": "Reserved name."},
+            return Response({_("available"): False, _("reason"): _("Reserved name.")},
                             status=status.HTTP_200_OK)
         if not re.fullmatch(r"[A-Za-z0-9]{1,50}", sub):
             return Response(
-                {"available": False,
-                 "reason": "1–50 alphanumeric characters only."},
+                {_("available"): False,
+                 _("reason"): _("1–50 alphanumeric characters only.")},
                 status=status.HTTP_200_OK
             )
         if Tenant.objects.filter(schema_name=sub).exists() or Domain.objects.filter(domain__startswith=f"{sub}.").exists():
-            return Response({"available": False, "reason": "Already in use."},
+            return Response({_("available"): False, _("reason"): _("Already in use.")},
                             status=status.HTTP_200_OK)
 
-        return Response({"available": True}, status=status.HTTP_200_OK)
+        return Response({_("available"): True}, status=status.HTTP_200_OK)
 
     @action(detail=False, methods=["post"], permission_classes=[AllowAny])
     def create_tenant(self, request):
@@ -222,19 +234,19 @@ class AuthViewSet(viewsets.GenericViewSet):
         reserved = {n.lower() for n in settings.RESERVED_SUBDOMAINS}
 
         if not sub:
-            return Response({"error": "Subdomain is required."},
+            return Response({_("error"): _("Subdomain is required.")},
                             status=status.HTTP_400_BAD_REQUEST)
         if sub in reserved:
-            return Response({"error": "Reserved name."},
+            return Response({_("error"): _("Reserved name.")},
                             status=status.HTTP_400_BAD_REQUEST)
         if not re.fullmatch(r"[A-Za-z0-9]{1,50}", sub):
-            return Response({"error": "1–50 alphanumeric chars only."},
+            return Response({_("error"): _("1–50 alphanumeric chars only.")},
                             status=status.HTTP_400_BAD_REQUEST)
 
         if settings.TENANT_CREATION_REQUIRE_CAPTCHA:
             recaptcha = request.data.get("recaptcha_token")
             if not recaptcha:
-                return Response({"error": "recaptcha_token is required."}, status=400)
+                return Response({_("error"): _("recaptcha_token is required.")}, status=400)
             try:
                 rec_r = requests.post(
                     "https://www.google.com/recaptcha/api/siteverify",
@@ -246,15 +258,15 @@ class AuthViewSet(viewsets.GenericViewSet):
                 ).json()
             except requests.RequestException as e:
                 return Response(
-                    {"error":"Recaptcha service unavailable.","details":str(e)},
+                    {_("error"):_("Recaptcha service unavailable."),_("details"):_(str(e))},
                     status=503
                 )
             if not rec_r.get("success") or rec_r.get("score", 0) < 0.5:
-                return Response({"error":"Recaptcha validation failed."}, status=400)
+                return Response({_("error"):_("Recaptcha validation failed.")}, status=400)
 
         domain = f"{sub}.{settings.TENANT_SUBDOMAIN_BASE}"
         if Tenant.objects.filter(schema_name=sub).exists() or Domain.objects.filter(domain=domain).exists():
-            return Response({"error": "Already exists."},
+            return Response({_("error"): _("Already exists.")},
                             status=status.HTTP_409_CONFLICT)
 
         try:
@@ -265,8 +277,8 @@ class AuthViewSet(viewsets.GenericViewSet):
                     tenant=tenant, domain=domain, is_primary=True
                 )
         except Exception as e:
-            return Response({"error": "Failed to create records.",
-                             "details": str(e)},
+            return Response({_("error"): _("Failed to create records."),
+                             _("details"): _(str(e))},
                             status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         try:
@@ -278,12 +290,20 @@ class AuthViewSet(viewsets.GenericViewSet):
             )
         except Exception as e:
             tenant.delete()
-            return Response({"error": "Migration failed.",
-                             "details": str(e)},
+            return Response({_("error"): _("Migration failed."),
+                             _("details"): _(str(e))},
                             status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         return Response({
-            "message": "Tenant created.",
+            _("message"): _("Tenant created."),
             "schema":  sub,
             "domain":  domain
         }, status=status.HTTP_201_CREATED)
+
+    @action(detail=False, methods=["post"], permission_classes=[AllowAny])
+    def register(self, request):
+        serializer = UserRegisterSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()
+        out = UserDetailSerializer(user)
+        return Response(out.data, status=status.HTTP_201_CREATED)

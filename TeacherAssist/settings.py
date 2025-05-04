@@ -50,6 +50,7 @@ CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS",default=[f"https://*.{SIT
 TENANT_CREATION_REQUIRE_CAPTCHA   = env.bool("TENANT_CREATION_REQUIRE_CAPTCHA",   default=True)
 TENANT_CREATION_THROTTLE_ENABLED  = env.bool("TENANT_CREATION_THROTTLE_ENABLED",  default=True)
 TENANT_CHECK_THROTTLE_ENABLED     = env.bool("TENANT_CHECK_THROTTLE_ENABLED",     default=True)
+REGISTER_THROTTLE_ENABLED         = env.bool("REGISTER_THROTTLE_ENABLED",         default=True)
 
 SHARED_APPS = [
     "django_tenants",
@@ -97,7 +98,8 @@ REST_FRAMEWORK = {
     'DEFAULT_PAGINATION_CLASS': 'auth.pagination.CustomPageNumberPagination',
     "DEFAULT_THROTTLE_RATES": {
         "tenant_creation": "5/hour",
-        "tenant_check":    "1000/hour",
+        "tenant_check"   : "1000/hour",
+        "register"       : "30/hour",
     },
     'PAGE_SIZE': 30,
 }
