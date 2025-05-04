@@ -175,7 +175,7 @@ class AuthViewSet(viewsets.GenericViewSet):
         resp.delete_cookie(settings.SIMPLE_JWT["REFRESH_COOKIE"], path="/")
         return resp
 
-    @action(detail=False, methods=["get"], permission_classes=[AllowAny], throttle_scope="tenant_check")
+    @action(detail=False, methods=["get"], permission_classes=[AllowAny])
     def check_tenant(self, request):
         sub = request.query_params.get("subdomain", "").strip().lower()
         reserved = {n.lower() for n in settings.RESERVED_SUBDOMAINS}
@@ -201,7 +201,7 @@ class AuthViewSet(viewsets.GenericViewSet):
 
         return Response({"available": True}, status=status.HTTP_200_OK)
 
-    @action(detail=False, methods=["post"], permission_classes=[AllowAny], throttle_scope="tenant_creation")
+    @action(detail=False, methods=["post"], permission_classes=[AllowAny])
     def create_tenant(self, request):
         sub = (request.data.get("subdomain") or "").strip().lower()
         reserved = {n.lower() for n in settings.RESERVED_SUBDOMAINS}

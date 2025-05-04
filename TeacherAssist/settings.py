@@ -92,7 +92,7 @@ REST_FRAMEWORK = {
         'drf_spectacular.openapi.AutoSchema'
     ),
     "DEFAULT_THROTTLE_CLASSES": (
-        "rest_framework.throttling.ScopedRateThrottle",
+        "auth.throttles.ConditionalScopeThrottle",
     ),
     'DEFAULT_PAGINATION_CLASS': 'auth.pagination.CustomPageNumberPagination',
     "DEFAULT_THROTTLE_RATES": {
