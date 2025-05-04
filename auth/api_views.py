@@ -145,8 +145,13 @@ class AuthViewSet(viewsets.GenericViewSet):
             return Response({"error": "Invalid refresh token.", "details": str(e)},
                             status=status.HTTP_401_UNAUTHORIZED)
 
-        access = serializer.validated_data["access"]
-        resp = Response({"access": access}, status=status.HTTP_200_OK)
+        access  = serializer.validated_data["access"]
+        data    = {"access": access}
+        new_ref = serializer.validated_data.get("refresh")
+        if new_ref:
+            data["refresh"] = new_ref
+
+        resp = Response(data, status=status.HTTP_200_OK)
         resp.set_cookie(
             settings.SIMPLE_JWT["AUTH_COOKIE"],
             access,
@@ -156,6 +161,16 @@ class AuthViewSet(viewsets.GenericViewSet):
             httponly=settings.SIMPLE_JWT["AUTH_COOKIE_HTTP_ONLY"],
             samesite=settings.SIMPLE_JWT["AUTH_COOKIE_SAMESITE"],
         )
+        if new_ref:
+            resp.set_cookie(
+                settings.SIMPLE_JWT["REFRESH_COOKIE"],
+                new_ref,
+                path="/",
+                max_age=int(settings.SIMPLE_JWT["REFRESH_TOKEN_LIFETIME"].total_seconds()),
+                secure=settings.SIMPLE_JWT["REFRESH_COOKIE_SECURE"],
+                httponly=settings.SIMPLE_JWT["REFRESH_COOKIE_HTTP_ONLY"],
+                samesite=settings.SIMPLE_JWT["REFRESH_COOKIE_SAMESITE"],
+            )
         return resp
 
     @action(detail=False, methods=["post"], permission_classes=[IsAuthenticated])
