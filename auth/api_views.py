@@ -16,30 +16,36 @@ from auth.authentication import CookieJWTAuthentication
 from auth.models import TwoFactor
 from auth.serializers import LoginSerializer, RefreshSerializer, LogoutSerializer, TenantCreateSerializer, \
     TenantCreateResponseSerializer, CheckTenantSerializer, UserRegisterSerializer, UserDetailSerializer, \
-    TwoFactorEnableSerializer, TwoFactorDisableSerializer
+    TwoFactorEnableSerializer, TwoFactorDisableSerializer, TwoFactorSetupSerializer
 from auth.throttles import ConditionalScopeThrottle
 from tenants.models import Tenant, Domain
 from django.utils.translation import gettext_lazy as _
 
 @extend_schema_view(
     login=extend_schema(
-        summary="Obtain JWT tokens",
+        summary="Login with optional 2FA",
         description=(
-                "If 2FA is off, sets access+refresh cookies → 204.  "
-                "If 2FA is on and no OTP supplied → 403 + { otp_required: true }.  "
-                "If 2FA is on and invalid OTP → 400.  "
-                "If 2FA is on and OTP valid → 204."
+            "Authenticate a user and issue JWT access & refresh tokens as secure, HttpOnly cookies.\n\n"
+            "**Behavior:**\n"
+            "- **2FA disabled**: Validate username & password → 204 No Content + cookies.\n"
+            "- **2FA enabled, no OTP**: 403 Forbidden + `{ otp_required: true }`.\n"
+            "- **2FA enabled, invalid OTP**: 400 Bad Request + `{ otp: 'Invalid two-factor code.' }`.\n"
+            "- **2FA enabled, valid OTP**: 204 No Content + cookies.\n\n"
+            "**Cookies set:** `access_token` and `refresh_token`, flags: Secure, HttpOnly, SameSite=Lax."
         ),
         request=LoginSerializer,
         responses={
             204: OpenApiResponse(description="Logged in via cookies"),
+            403: OpenApiResponse(description="OTP required: { otp_required: true }"),
             400: OpenApiResponse(description="Invalid credentials or OTP"),
-            403: OpenApiResponse(description="OTP required"),
         },
     ),
     refresh=extend_schema(
-        summary="Refresh access token",
-        description="Refresh the access token, reading the refresh token from cookie or body.",
+        summary="Refresh JWT access token",
+        description=(
+            "Rotate the access token by validating a refresh token (from cookie or body).  \n"
+            "On success, sets a new `access_token` cookie and optionally returns a new `refresh`."
+        ),
         request=RefreshSerializer,
         responses={
             200: OpenApiResponse(
@@ -51,16 +57,18 @@ from django.utils.translation import gettext_lazy as _
         },
     ),
     logout=extend_schema(
-        summary="Logout & blacklist refresh token",
-        description="Blacklists the refresh token (from cookie) and clears both cookies.",
+        summary="Logout user",
+        description="Blacklist the refresh token (from cookie) and clear both access + refresh cookies.",
         request=LogoutSerializer,
         responses={200: OpenApiResponse(description="Logged out successfully.")},
     ),
     create_tenant=extend_schema(
         summary="Onboard a new tenant",
         description=(
-            "Creates a new schema and domain. "
-            "Requires `subdomain` and a `recaptcha_token` from Google reCAPTCHA v3."
+            "Atomically create a new PostgreSQL schema and domain for a tenant.\n\n"
+            "- **Request:** `{ subdomain, recaptcha_token }`  \n"
+            "- **Checks:** alphanumeric‐only subdomain (1–50 chars), reserved names, reCAPTCHA v3 score ≥ 0.5, uniqueness.\n"
+            "- **On success:** runs `migrate_schemas` for the new tenant schema."
         ),
         request=TenantCreateSerializer,
         responses={
@@ -68,22 +76,22 @@ from django.utils.translation import gettext_lazy as _
             400: OpenApiResponse(description="Validation or reCAPTCHA failure"),
             409: OpenApiResponse(description="Subdomain already exists"),
             429: OpenApiResponse(description="Rate limit exceeded"),
-            500: OpenApiResponse(description="Internal error"),
+            500: OpenApiResponse(description="Internal server error"),
         },
     ),
     check_tenant=extend_schema(
-        summary="Check tenant availability",
+        summary="Check tenant subdomain availability",
         description=(
-                "Returns whether a subdomain is available. "
-                "Intended for front-end debounced checks."
+            "Quick lookup for whether a given subdomain is free to onboard.  \n"
+            "Intended for front-end debounced checks before calling `create_tenant`."
         ),
         parameters=[
             OpenApiParameter(
                 name="subdomain",
                 type=str,
-                location="query",
+                location=OpenApiParameter.QUERY,
                 required=True,
-                description="Proposed tenant subdomain to check."
+                description="Subdomain to check (alphanumeric, 1–50 chars)."
             )
         ],
         responses={
@@ -93,24 +101,81 @@ from django.utils.translation import gettext_lazy as _
         },
     ),
     register=extend_schema(
-        summary="Register a new user/login",
-        description="Creates a new user in the current tenant schema.",
+        summary="Register a new user",
+        description=(
+            "Create a new user in the **current** tenant schema.  \n"
+            "- **Request:** `{ username, email, password, password2 }`  \n"
+            "- Performs uniqueness checks & password validation.  \n"
+            "- Does **not** log in—the client must call `/auth/login/` afterwards."
+        ),
         request=UserRegisterSerializer,
         responses={
             201: OpenApiResponse(response=UserDetailSerializer, description="User created"),
             400: OpenApiResponse(description="Validation error"),
             429: OpenApiResponse(description="Rate limit exceeded"),
         },
-    )
+    ),
+    two_factor_setup=extend_schema(
+        summary="Initialize TOTP 2FA setup",
+        description=(
+            "Generate (or retrieve) the user's TOTP secret and provisioning URI.\n\n"
+            "- **GET** returns `{ secret, provisioning_uri }` for scanning in Google Authenticator.\n"
+            "- Idempotent: repeated calls reuse the same secret."
+        ),
+        responses={200: TwoFactorSetupSerializer},
+    ),
+    two_factor_enable=extend_schema(
+        summary="Enable TOTP 2FA",
+        description=(
+            "Activate two-factor by verifying the first code from the user's authenticator app.\n\n"
+            "- **Request:** `{ otp }`  \n"
+            "- On success, flips `enabled=True` for the user."
+        ),
+        request=TwoFactorEnableSerializer,
+        responses={200: OpenApiResponse(description="2FA enabled successfully")},
+    ),
+    two_factor_disable=extend_schema(
+        summary="Disable TOTP 2FA",
+        description=(
+            "Turn off two-factor, after verifying a valid current code.\n\n"
+            "- **Request:** `{ otp }`  \n"
+            "- On success, flips `enabled=False`."
+        ),
+        request=TwoFactorDisableSerializer,
+        responses={200: OpenApiResponse(description="2FA disabled successfully")},
+    ),
 )
 
 class AuthViewSet(viewsets.GenericViewSet):
     """
-    - POST /auth/login/         → issue JWTs as cookies
-    - POST /auth/refresh/       → rotate access_token cookie
-    - POST /auth/logout/        → blacklist + clear cookies
-    - POST /auth/create_tenant/ → onboard a new tenant (atomic)
-    - POST /auth/register/      → register a login user for any tenant
+    Handles **authentication**, **tenant management**, **user registration**, and **optional TOTP-based 2FA**.
+
+    1. **Login** (`POST /auth/login/`)
+       Authenticate credentials (and OTP if enabled) → issue JWT cookies.
+
+    2. **Token Refresh** (`POST /auth/refresh/`)
+       Rotate access token using refresh cookie or body → set new cookie.
+
+    3. **Logout** (`POST /auth/logout/`)
+       Blacklist the current refresh token → clear JWT cookies.
+
+    4. **Tenant Onboarding** (`POST /auth/create_tenant/`)
+       Create a new tenant schema & domain, protected by reCAPTCHA and rate limits.
+
+    5. **Check Tenant** (`GET /auth/check_tenant/?subdomain=…`)
+       Debounced availability check for front-end subdomain preflight.
+
+    6. **User Registration** (`POST /auth/register/`)
+       Create a new user within the tenant’s schema.
+
+    7. **2FA Setup** (`GET /auth/two_factor_setup/`)
+       Generate or retrieve a TOTP secret + provisioning URI.
+
+    8. **2FA Enable** (`POST /auth/two_factor_enable/`)
+       Verify first TOTP code to activate 2FA.
+
+    9. **2FA Disable** (`POST /auth/two_factor_disable/`)
+       Verify TOTP code to deactivate 2FA.
     """
     authentication_classes = [CookieJWTAuthentication]
     permission_classes     = [AllowAny]
