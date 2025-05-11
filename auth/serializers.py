@@ -8,11 +8,39 @@ from rest_framework_simplejwt.serializers import (
 )
 from django.contrib.auth import get_user_model, password_validation
 
+from auth.models import TwoFactor
+
 User = get_user_model()
 
-class LoginSerializer(TokenObtainPairSerializer):
-    # inherits `username` & `password` in → `access` & `refresh` out
-    pass
+class LoginSerializer(serializers.Serializer):
+    username = serializers.CharField()
+    password = serializers.CharField(write_only=True)
+    otp      = serializers.CharField(write_only=True, required=False)
+
+    def validate(self, attrs):
+        jwt_ser = TokenObtainPairSerializer(data={
+            "username": attrs["username"],
+            "password": attrs["password"],
+        })
+        jwt_ser.is_valid(raise_exception=True)
+        user   = jwt_ser.user
+        access = jwt_ser.validated_data["access"]
+        refresh= jwt_ser.validated_data["refresh"]
+
+        tf = getattr(user, "two_factor", None)
+        if tf and tf.enabled:
+            otp = attrs.get("otp")
+            if not otp:
+                raise serializers.ValidationError({"otp":"Two-factor code required."})
+            if not tf.get_totp().verify(otp, valid_window=1):
+                raise serializers.ValidationError({"otp":"Invalid two-factor code."})
+
+        return {
+            "user":    user,
+            "access":  access,
+            "refresh": refresh
+        }
+
 
 class RefreshSerializer(TokenRefreshSerializer):
     # inherits `refresh` in → `access` out
@@ -97,3 +125,16 @@ class UserDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model  = User
         fields = ("id", "username", "email", "first_name", "last_name")
+
+
+class TwoFactorSetupSerializer(serializers.Serializer):
+    secret           = serializers.CharField(read_only=True)
+    provisioning_uri = serializers.CharField(read_only=True)
+
+
+class TwoFactorEnableSerializer(serializers.Serializer):
+    otp = serializers.CharField(write_only=True)
+
+
+class TwoFactorDisableSerializer(serializers.Serializer):
+    otp = serializers.CharField(write_only=True)

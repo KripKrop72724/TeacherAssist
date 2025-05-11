@@ -1,4 +1,6 @@
 import re
+
+import pyotp
 from rest_framework.throttling import ScopedRateThrottle
 import requests
 import auth.openapi
@@ -14,8 +16,10 @@ from rest_framework_simplejwt.serializers import (TokenObtainPairSerializer,Toke
 from rest_framework_simplejwt.tokens import RefreshToken
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiResponse, OpenApiParameter
 from auth.authentication import CookieJWTAuthentication
+from auth.models import TwoFactor
 from auth.serializers import LoginSerializer, RefreshSerializer, LogoutSerializer, TenantCreateSerializer, \
-    TenantCreateResponseSerializer, CheckTenantSerializer, UserRegisterSerializer, UserDetailSerializer
+    TenantCreateResponseSerializer, CheckTenantSerializer, UserRegisterSerializer, UserDetailSerializer, \
+    TwoFactorEnableSerializer, TwoFactorDisableSerializer
 from auth.throttles import ConditionalScopeThrottle
 from tenants.models import Tenant, Domain
 from django.utils.translation import gettext_lazy as _
@@ -23,13 +27,17 @@ from django.utils.translation import gettext_lazy as _
 @extend_schema_view(
     login=extend_schema(
         summary="Obtain JWT tokens",
-        description="Given valid credentials, returns access+refresh tokens and sets them as secure, HTTP-only cookies.",
+        description=(
+                "If 2FA is off, sets access+refresh cookies → 204.  "
+                "If 2FA is on and no OTP supplied → 403 + { otp_required: true }.  "
+                "If 2FA is on and invalid OTP → 400.  "
+                "If 2FA is on and OTP valid → 204."
+        ),
         request=LoginSerializer,
         responses={
-            200: OpenApiResponse(
-                response=LoginSerializer,
-                description="Returns `{ access, refresh }` and sets cookies."
-            )
+            204: OpenApiResponse(description="Logged in via cookies"),
+            400: OpenApiResponse(description="Invalid credentials or OTP"),
+            403: OpenApiResponse(description="OTP required"),
         },
     ),
     refresh=extend_schema(
@@ -113,36 +121,85 @@ class AuthViewSet(viewsets.GenericViewSet):
 
     @action(detail=False, methods=["post"], permission_classes=[AllowAny])
     def login(self, request):
-        serializer = TokenObtainPairSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        access, refresh = (
-            serializer.validated_data["access"],
-            serializer.validated_data["refresh"],
-        )
+        inp = LoginSerializer(data=request.data)
+        inp.is_valid(raise_exception=True)
+        user = inp.validated_data["user"]
+        access = inp.validated_data["access"]
+        refresh = inp.validated_data["refresh"]
 
         resp = Response(status=status.HTTP_204_NO_CONTENT)
-
-        cookie_config = [
-            ("AUTH_COOKIE", "ACCESS_TOKEN_LIFETIME", access),
-            ("REFRESH_COOKIE", "REFRESH_TOKEN_LIFETIME", refresh),
-        ]
-
-        for cookie_key, lifetime_key, token in cookie_config:
-            name = settings.SIMPLE_JWT[cookie_key]
-            lifetime = settings.SIMPLE_JWT[lifetime_key]
+        for ck, lt in (
+                ("AUTH_COOKIE", "ACCESS_TOKEN_LIFETIME"),
+                ("REFRESH_COOKIE", "REFRESH_TOKEN_LIFETIME"),
+        ):
+            name = settings.SIMPLE_JWT[ck]
+            lifetime = settings.SIMPLE_JWT[lt]
+            token = inp.validated_data[ck == "AUTH_COOKIE" and "access" or "refresh"]
 
             resp.set_cookie(
-                key=name,
-                value=token,
+                name, token,
                 domain=settings.COOKIE_DOMAIN,
-                path="/",
-                max_age=int(lifetime.total_seconds()),
-                secure=settings.SIMPLE_JWT[f"{cookie_key}_SECURE"],
-                httponly=settings.SIMPLE_JWT[f"{cookie_key}_HTTP_ONLY"],
-                samesite=settings.SIMPLE_JWT[f"{cookie_key}_SAMESITE"],
+                path="/", max_age=int(lifetime.total_seconds()),
+                secure=settings.SIMPLE_JWT[f"{ck}_SECURE"],
+                httponly=settings.SIMPLE_JWT[f"{ck}_HTTP_ONLY"],
+                samesite=settings.SIMPLE_JWT[f"{ck}_SAMESITE"],
             )
-
         return resp
+
+    @action(detail=False, methods=["get"], permission_classes=[IsAuthenticated])
+    def two_factor_setup(self, request):
+        user = request.user
+        tf, created = TwoFactor.objects.get_or_create(
+            user=user,
+            defaults={"secret": pyotp.random_base32()}
+        )
+        data = {
+            "secret":           tf.secret,
+            "provisioning_uri": tf.provisioning_uri(),
+        }
+        return Response(data, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=["post"], permission_classes=[IsAuthenticated])
+    def two_factor_enable(self, request):
+        user = request.user
+        serializer = TwoFactorEnableSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            tf = user.two_factor
+        except TwoFactor.DoesNotExist:
+            return Response({"error":"Call setup first."},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        otp = serializer.validated_data["otp"]
+        if not tf.get_totp().verify(otp):
+            return Response({"error":"Invalid code."},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        tf.enabled = True
+        tf.save(update_fields=["enabled"])
+        return Response({"detail":"2FA enabled."}, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=["post"], permission_classes=[IsAuthenticated])
+    def two_factor_disable(self, request):
+        user = request.user
+        serializer = TwoFactorDisableSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            tf = user.two_factor
+        except TwoFactor.DoesNotExist:
+            return Response({"error":"2FA not active."},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        otp = serializer.validated_data["otp"]
+        if not tf.get_totp().verify(otp):
+            return Response({"error":"Invalid code."},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        tf.enabled = False
+        tf.save(update_fields=["enabled"])
+        return Response({"detail":"2FA disabled."}, status=status.HTTP_200_OK)
 
     @action(detail=False, methods=["post"], permission_classes=[AllowAny])
     def refresh(self, request):
