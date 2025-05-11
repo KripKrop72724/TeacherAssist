@@ -1,9 +1,6 @@
 import re
-
 import pyotp
-from rest_framework.throttling import ScopedRateThrottle
 import requests
-import auth.openapi
 from django.conf import settings
 from django.core.management import call_command
 from django.db import transaction
@@ -208,18 +205,18 @@ class AuthViewSet(viewsets.GenericViewSet):
             or request.COOKIES.get(settings.SIMPLE_JWT["REFRESH_COOKIE"])
         )
         if not refresh_token:
-            return Response({_("error"): _("No refresh token provided.")},
+            return Response({"error": _("No refresh token provided.")},
                             status=status.HTTP_400_BAD_REQUEST)
 
         serializer = TokenRefreshSerializer(data={"refresh": refresh_token})
         try:
             serializer.is_valid(raise_exception=True)
         except TokenError as e:
-            return Response({_("error"): _("Invalid refresh token."), _("details"): str(e)},
+            return Response({"error": _("Invalid refresh token."), "details": str(e)},
                             status=status.HTTP_401_UNAUTHORIZED)
 
         access  = serializer.validated_data["access"]
-        data    = {_("access"): access}
+        data    = {"access": access}
         new_ref = serializer.validated_data.get("refresh")
         if new_ref:
             data["refresh"] = new_ref
@@ -250,15 +247,15 @@ class AuthViewSet(viewsets.GenericViewSet):
     def logout(self, request):
         token = request.COOKIES.get(settings.SIMPLE_JWT["REFRESH_COOKIE"])
         if not token:
-            return Response({_("error"): _("No refresh token in cookies.")},
+            return Response({"error": _("No refresh token in cookies.")},
                             status=status.HTTP_400_BAD_REQUEST)
         try:
             RefreshToken(token).blacklist()
         except TokenError as e:
-            return Response({_("error"): _("Failed to blacklist token."), _("details"): _(str(e))},
+            return Response({"error": _("Failed to blacklist token."), _("details"): _(str(e))},
                             status=status.HTTP_400_BAD_REQUEST)
 
-        resp = Response({_("detail"): _("Logged out.")}, status=status.HTTP_200_OK)
+        resp = Response({"detail": _("Logged out.")}, status=status.HTTP_200_OK)
         resp.delete_cookie(settings.SIMPLE_JWT["AUTH_COOKIE"], path="/")
         resp.delete_cookie(settings.SIMPLE_JWT["REFRESH_COOKIE"], path="/")
         return resp
@@ -270,24 +267,24 @@ class AuthViewSet(viewsets.GenericViewSet):
 
         if not sub:
             return Response(
-                {_("available"): False,
-                 _("reason"): _("Subdomain parameter is required.")},
+                {"available": False,
+                 "reason": _("Subdomain parameter is required.")},
                 status=status.HTTP_400_BAD_REQUEST
             )
         if sub in reserved:
-            return Response({_("available"): False, _("reason"): _("Reserved name.")},
+            return Response({"available": False, "reason": _("Reserved name.")},
                             status=status.HTTP_200_OK)
         if not re.fullmatch(r"[A-Za-z0-9]{1,50}", sub):
             return Response(
-                {_("available"): False,
-                 _("reason"): _("1–50 alphanumeric characters only.")},
+                {"available": False,
+                 "reason": _("1–50 alphanumeric characters only.")},
                 status=status.HTTP_200_OK
             )
         if Tenant.objects.filter(schema_name=sub).exists() or Domain.objects.filter(domain__startswith=f"{sub}.").exists():
-            return Response({_("available"): False, _("reason"): _("Already in use.")},
+            return Response({"available": False, "reason": _("Already in use.")},
                             status=status.HTTP_200_OK)
 
-        return Response({_("available"): True}, status=status.HTTP_200_OK)
+        return Response({"available": True}, status=status.HTTP_200_OK)
 
     @action(detail=False, methods=["post"], permission_classes=[AllowAny])
     def create_tenant(self, request):
@@ -295,40 +292,58 @@ class AuthViewSet(viewsets.GenericViewSet):
         reserved = {n.lower() for n in settings.RESERVED_SUBDOMAINS}
 
         if not sub:
-            return Response({_("error"): _("Subdomain is required.")},
-                            status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": _("Subdomain is required.")},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         if sub in reserved:
-            return Response({_("error"): _("Reserved name.")},
-                            status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": _("Reserved name.")},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         if not re.fullmatch(r"[A-Za-z0-9]{1,50}", sub):
-            return Response({_("error"): _("1–50 alphanumeric chars only.")},
-                            status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": _("1–50 alphanumeric chars only.")},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         if settings.TENANT_CREATION_REQUIRE_CAPTCHA:
             recaptcha = request.data.get("recaptcha_token")
             if not recaptcha:
-                return Response({_("error"): _("recaptcha_token is required.")}, status=400)
+                return Response(
+                    {"error": _("recaptcha_token is required.")},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
             try:
                 rec_r = requests.post(
                     "https://www.google.com/recaptcha/api/siteverify",
                     data={
-                        "secret":   settings.RECAPTCHA_SECRET_KEY,
+                        "secret": settings.RECAPTCHA_SECRET_KEY,
                         "response": recaptcha,
                     },
                     timeout=5,
                 ).json()
             except requests.RequestException as e:
                 return Response(
-                    {_("error"):_("Recaptcha service unavailable."),_("details"):_(str(e))},
-                    status=503
+                    {
+                        "error":   _("Recaptcha service unavailable."),
+                        "details": str(e)
+                    },
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE
                 )
             if not rec_r.get("success") or rec_r.get("score", 0) < 0.5:
-                return Response({_("error"):_("Recaptcha validation failed.")}, status=400)
+                return Response(
+                    {"error": _("Recaptcha validation failed.")},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
         domain = f"{sub}.{settings.TENANT_SUBDOMAIN_BASE}"
-        if Tenant.objects.filter(schema_name=sub).exists() or Domain.objects.filter(domain=domain).exists():
-            return Response({_("error"): _("Already exists.")},
-                            status=status.HTTP_409_CONFLICT)
+        if Tenant.objects.filter(schema_name=sub).exists() or \
+           Domain.objects.filter(domain=domain).exists():
+            return Response(
+                {"error": _("Tenant or domain already exists.")},
+                status=status.HTTP_409_CONFLICT
+            )
 
         try:
             with transaction.atomic():
@@ -338,9 +353,13 @@ class AuthViewSet(viewsets.GenericViewSet):
                     tenant=tenant, domain=domain, is_primary=True
                 )
         except Exception as e:
-            return Response({_("error"): _("Failed to create records."),
-                             _("details"): _(str(e))},
-                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response(
+                {
+                    "error":   _("Failed to create records."),
+                    "details": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
         try:
             call_command(
@@ -351,15 +370,22 @@ class AuthViewSet(viewsets.GenericViewSet):
             )
         except Exception as e:
             tenant.delete()
-            return Response({_("error"): _("Migration failed."),
-                             _("details"): _(str(e))},
-                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response(
+                {
+                    "error":   _("Migration failed."),
+                    "details": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
-        return Response({
-            _("message"): _("Tenant created."),
-            "schema":  sub,
-            "domain":  domain
-        }, status=status.HTTP_201_CREATED)
+        return Response(
+            {
+                "message": _("Tenant created."),
+                "schema":  sub,
+                "domain":  domain
+            },
+            status=status.HTTP_201_CREATED
+        )
 
     @action(detail=False, methods=["post"], permission_classes=[AllowAny])
     def register(self, request):
