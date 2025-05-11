@@ -288,8 +288,9 @@ class AuthViewSet(viewsets.GenericViewSet):
 
     @action(detail=False, methods=["post"], permission_classes=[AllowAny])
     def create_tenant(self, request):
-        sub = (request.data.get("subdomain") or "").strip().lower()
-        reserved = {n.lower() for n in settings.RESERVED_SUBDOMAINS}
+        raw = request.data.get("subdomain", "")
+        sub = str(raw).strip().lower()
+        reserved = {name.lower() for name in settings.RESERVED_SUBDOMAINS}
 
         if not sub:
             return Response(
@@ -298,48 +299,49 @@ class AuthViewSet(viewsets.GenericViewSet):
             )
         if sub in reserved:
             return Response(
-                {"error": _("Reserved name.")},
+                {"error": _("That name is reserved.")},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        if not re.fullmatch(r"[A-Za-z0-9]{1,50}", sub):
+        if not re.fullmatch(r"^[A-Za-z0-9]{1,50}$", sub):
             return Response(
-                {"error": _("1–50 alphanumeric chars only.")},
+                {"error": _("Subdomain must be 1–50 alphanumeric characters.")},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
         if settings.TENANT_CREATION_REQUIRE_CAPTCHA:
-            recaptcha = request.data.get("recaptcha_token")
-            if not recaptcha:
+            recaptcha_token = request.data.get("recaptcha_token")
+            if not recaptcha_token:
                 return Response(
-                    {"error": _("recaptcha_token is required.")},
+                    {"error": _("`recaptcha_token` is required.")},
                     status=status.HTTP_400_BAD_REQUEST
                 )
             try:
                 rec_r = requests.post(
                     "https://www.google.com/recaptcha/api/siteverify",
                     data={
-                        "secret": settings.RECAPTCHA_SECRET_KEY,
-                        "response": recaptcha,
+                        "secret":   settings.RECAPTCHA_SECRET_KEY,
+                        "response": recaptcha_token,
                     },
                     timeout=5,
-                ).json()
+                )
+                rec_r.raise_for_status()
+                rec = rec_r.json()
             except requests.RequestException as e:
                 return Response(
                     {
                         "error":   _("Recaptcha service unavailable."),
-                        "details": str(e)
+                        "details": str(e),
                     },
                     status=status.HTTP_503_SERVICE_UNAVAILABLE
                 )
-            if not rec_r.get("success") or rec_r.get("score", 0) < 0.5:
+            if not rec.get("success") or rec.get("score", 0) < 0.5:
                 return Response(
                     {"error": _("Recaptcha validation failed.")},
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
         domain = f"{sub}.{settings.TENANT_SUBDOMAIN_BASE}"
-        if Tenant.objects.filter(schema_name=sub).exists() or \
-           Domain.objects.filter(domain=domain).exists():
+        if Tenant.objects.filter(schema_name=sub).exists() or Domain.objects.filter(domain=domain).exists():
             return Response(
                 {"error": _("Tenant or domain already exists.")},
                 status=status.HTTP_409_CONFLICT
@@ -348,14 +350,16 @@ class AuthViewSet(viewsets.GenericViewSet):
         try:
             with transaction.atomic():
                 tenant = Tenant(schema_name=sub, name=sub.capitalize())
-                tenant.save()
+                tenant.save()  # auto_create_schema=True creates the schema
                 Domain.objects.create(
-                    tenant=tenant, domain=domain, is_primary=True
+                    tenant=tenant,
+                    domain=domain,
+                    is_primary=True
                 )
         except Exception as e:
             return Response(
                 {
-                    "error":   _("Failed to create records."),
+                    "error":   _("Failed to create tenant record."),
                     "details": str(e)
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -369,10 +373,13 @@ class AuthViewSet(viewsets.GenericViewSet):
                 verbosity=1,
             )
         except Exception as e:
-            tenant.delete()
+            try:
+                tenant.delete()
+            except Exception:
+                pass
             return Response(
                 {
-                    "error":   _("Migration failed."),
+                    "error":   _("Tenant onboarding failed during migrations."),
                     "details": str(e)
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -380,7 +387,7 @@ class AuthViewSet(viewsets.GenericViewSet):
 
         return Response(
             {
-                "message": _("Tenant created."),
+                "message": _("Tenant created successfully."),
                 "schema":  sub,
                 "domain":  domain
             },
