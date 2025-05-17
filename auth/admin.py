@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.contrib.auth import get_user_model
-from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
+from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 
 from rest_framework_simplejwt.token_blacklist.models import (
     OutstandingToken, BlacklistedToken
@@ -8,13 +8,16 @@ from rest_framework_simplejwt.token_blacklist.models import (
 
 from auth.models import TwoFactor
 
+
 User = get_user_model()
 
+admin.site.unregister(User)
+
 @admin.register(User)
-class UserAdmin(BaseUserAdmin):
+class UserAdmin(DjangoUserAdmin):
     list_display   = ('username', 'email', 'is_active', 'is_staff', 'get_2fa')
     list_filter    = ('is_active', 'is_staff', 'is_superuser')
-    search_fields  = ('username','email')
+    search_fields  = ('username', 'email')
     ordering       = ('username',)
 
     def get_2fa(self, obj):
@@ -25,10 +28,10 @@ class UserAdmin(BaseUserAdmin):
 
 @admin.register(TwoFactor)
 class TwoFactorAdmin(admin.ModelAdmin):
-    list_display   = ('user', 'enabled', 'created')
-    list_filter    = ('enabled',)
-    search_fields  = ('user__username','user__email')
-    readonly_fields= ('secret','created')
+    list_display    = ('user', 'enabled', 'created')
+    list_filter     = ('enabled',)
+    search_fields   = ('user__username', 'user__email')
+    readonly_fields = ('secret', 'created')
 
 @admin.register(OutstandingToken)
 class OutstandingTokenAdmin(admin.ModelAdmin):
