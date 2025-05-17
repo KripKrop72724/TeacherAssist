@@ -26,11 +26,10 @@ def root(request):
         "tenant": request.tenant.schema_name
     })
 
-path('admin/', include('grappelli.urls')),
-
 urlpatterns = [
+    path('grappelli/', include('grappelli.urls')),
+    path('admin/', admin.site.urls),
     path("", root, name="root"),
-#   path('admin/', admin.site.urls), Can be toggled to turn on the custom admin for Django
     path('auth/', include('auth.urls', namespace='auth')),
 
 
