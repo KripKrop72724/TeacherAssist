@@ -62,6 +62,7 @@ SHARED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "grappelli",
     "django.contrib.admin",
     "corsheaders",
     "drf_spectacular",
@@ -83,6 +84,10 @@ INSTALLED_APPS = list(dict.fromkeys(SHARED_APPS + TENANT_APPS))
 
 TENANT_MODEL = 'tenants.Tenant'
 TENANT_DOMAIN_MODEL = 'tenants.Domain'
+
+GRAPPELLI_ADMIN_TITLE = "TeacherAssist Admin"
+GRAPPELLI_INDEX_DASHBOARD = "grappelli.dashboard.SelfDashboard"
+GRAPPELLI_AUTO_POPULATE = True
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
