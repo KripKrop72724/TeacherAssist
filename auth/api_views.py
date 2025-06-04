@@ -234,7 +234,7 @@ class AuthViewSet(viewsets.GenericViewSet):
                             status=status.HTTP_400_BAD_REQUEST)
 
         otp = serializer.validated_data["otp"]
-        if not tf.get_totp().verify(otp):
+        if not tf.get_totp().verify(otp, valid_window=1):
             return Response({"error":"Invalid code."},
                             status=status.HTTP_400_BAD_REQUEST)
 
@@ -255,7 +255,7 @@ class AuthViewSet(viewsets.GenericViewSet):
                             status=status.HTTP_400_BAD_REQUEST)
 
         otp = serializer.validated_data["otp"]
-        if not tf.get_totp().verify(otp):
+        if not tf.get_totp().verify(otp, valid_window=1):
             return Response({"error":"Invalid code."},
                             status=status.HTTP_400_BAD_REQUEST)
 
