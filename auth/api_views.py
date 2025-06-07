@@ -181,7 +181,7 @@ class AuthViewSet(viewsets.GenericViewSet):
     permission_classes     = [AllowAny]
     throttle_classes       = [ConditionalScopeThrottle]
 
-    @action(detail=False, methods=["post"], permission_classes=[AllowAny])
+    @action(detail=False, methods=["post"], permission_classes=[AllowAny], authentication_classes=[])
     def login(self, request):
         inp = LoginSerializer(data=request.data)
         inp.is_valid(raise_exception=True)
@@ -263,7 +263,7 @@ class AuthViewSet(viewsets.GenericViewSet):
         tf.save(update_fields=["enabled"])
         return Response({"detail":"2FA disabled."}, status=status.HTTP_200_OK)
 
-    @action(detail=False, methods=["post"], permission_classes=[AllowAny])
+    @action(detail=False, methods=["post"], permission_classes=[AllowAny], authentication_classes=[])
     def refresh(self, request):
         refresh_token = (
             request.data.get("refresh")
@@ -325,7 +325,7 @@ class AuthViewSet(viewsets.GenericViewSet):
         resp.delete_cookie(settings.SIMPLE_JWT["REFRESH_COOKIE"], path="/")
         return resp
 
-    @action(detail=False, methods=["get"], permission_classes=[AllowAny])
+    @action(detail=False, methods=["get"], permission_classes=[AllowAny], authentication_classes=[])
     def check_tenant(self, request):
         sub = request.query_params.get("subdomain", "").strip().lower()
         reserved = {n.lower() for n in settings.RESERVED_SUBDOMAINS}
@@ -351,7 +351,7 @@ class AuthViewSet(viewsets.GenericViewSet):
 
         return Response({"available": True}, status=status.HTTP_200_OK)
 
-    @action(detail=False, methods=["post"], permission_classes=[AllowAny])
+    @action(detail=False, methods=["post"], permission_classes=[AllowAny], authentication_classes=[])
     def create_tenant(self, request):
         raw = request.data.get("subdomain", "")
         sub = str(raw).strip().lower()
@@ -459,7 +459,7 @@ class AuthViewSet(viewsets.GenericViewSet):
             status=status.HTTP_201_CREATED
         )
 
-    @action(detail=False, methods=["post"], permission_classes=[AllowAny])
+    @action(detail=False, methods=["post"], permission_classes=[AllowAny], authentication_classes=[])
     def register(self, request):
         serializer = UserRegisterSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
