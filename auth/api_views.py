@@ -439,7 +439,7 @@ class AuthViewSet(viewsets.GenericViewSet):
             )
         except Exception as e:
             try:
-                tenant.delete()
+                tenant.delete(force_drop=True)
             except Exception:
                 pass
             return Response(
