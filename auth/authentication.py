@@ -20,6 +20,10 @@ class CookieJWTAuthentication(JWTAuthentication):
 
         try:
             validated_token = self.get_validated_token(raw_token)
+            schema_claim = validated_token.get("schema")
+            request_schema = getattr(request.tenant, "schema_name", None)
+            if schema_claim and request_schema and schema_claim != request_schema:
+                raise AuthenticationFailed("Token schema mismatch")
             return self.get_user(validated_token), validated_token
         except InvalidToken as e:
             raise AuthenticationFailed(str(e))

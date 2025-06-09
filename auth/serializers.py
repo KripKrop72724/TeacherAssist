@@ -12,16 +12,37 @@ from auth.models import TwoFactor
 
 User = get_user_model()
 
+
+class SchemaTokenObtainPairSerializer(TokenObtainPairSerializer):
+
+    def validate(self, attrs):
+        data = super().validate(attrs)
+
+        schema = self.context["request"].tenant.schema_name
+
+        refresh = self.get_token(self.user)
+        refresh["schema"] = schema
+        access = refresh.access_token
+        access["schema"] = schema
+
+        data["refresh"] = str(refresh)
+        data["access"] = str(access)
+        return data
+
+
 class LoginSerializer(serializers.Serializer):
     username = serializers.CharField()
     password = serializers.CharField(write_only=True)
     otp      = serializers.CharField(write_only=True, required=False)
 
     def validate(self, attrs):
-        jwt_ser = TokenObtainPairSerializer(data={
-            "username": attrs["username"],
-            "password": attrs["password"],
-        })
+        jwt_ser = SchemaTokenObtainPairSerializer(
+            data={
+                "username": attrs["username"],
+                "password": attrs["password"],
+            },
+            context={"request": self.context.get("request")},
+        )
         jwt_ser.is_valid(raise_exception=True)
         user   = jwt_ser.user
         access = jwt_ser.validated_data["access"]

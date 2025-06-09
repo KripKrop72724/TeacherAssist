@@ -1,3 +1,49 @@
-from django.test import TestCase
+from django.test import TestCase, RequestFactory, SimpleTestCase
+from django.contrib.auth import get_user_model
+from rest_framework_simplejwt.tokens import RefreshToken, AccessToken
+from rest_framework.exceptions import AuthenticationFailed
+from types import SimpleNamespace
 
-# Create your tests here.
+from django.conf import settings
+
+from auth.serializers import SchemaTokenObtainPairSerializer
+from auth.authentication import CookieJWTAuthentication
+
+
+class SchemaTokenSerializerTests(TestCase):
+    def setUp(self):
+        self.factory = RequestFactory()
+        self.user = get_user_model().objects.create_user(
+            username="tester", password="pass123"
+        )
+
+    def test_token_includes_schema(self):
+        request = self.factory.post("/")
+        request.tenant = SimpleNamespace(schema_name="tenant1")
+        ser = SchemaTokenObtainPairSerializer(
+            data={"username": "tester", "password": "pass123"},
+            context={"request": request},
+        )
+        self.assertTrue(ser.is_valid(), ser.errors)
+        access = AccessToken(ser.validated_data["access"])
+        self.assertEqual(access["schema"], "tenant1")
+
+
+class CookieJWTAuthenticationTests(SimpleTestCase):
+    def setUp(self):
+        self.factory = RequestFactory()
+        self.user = SimpleNamespace(id=1)
+
+    def test_schema_mismatch_rejects_token(self):
+        token = RefreshToken.for_user(self.user)
+        token["schema"] = "tenant1"
+        access = token.access_token
+        access["schema"] = "tenant1"
+
+        request = self.factory.get("/")
+        request.COOKIES = {settings.SIMPLE_JWT["AUTH_COOKIE"]: str(access)}
+        request.tenant = SimpleNamespace(schema_name="tenant2")
+
+        auth = CookieJWTAuthentication()
+        with self.assertRaises(AuthenticationFailed):
+            auth.authenticate(request)
