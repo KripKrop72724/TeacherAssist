@@ -406,7 +406,7 @@ class AuthViewSet(viewsets.GenericViewSet):
                 )
 
         domain = f"{sub}.{settings.TENANT_SUBDOMAIN_BASE}"
-        if Tenant.objects.filter(schema_name=sub).exists() or Domain.objects.filter(domain=domain).exists():
+        if Tenant.objects.filter(schema_name=sub).exists() or Domain.objects.filter(domain__startswith=f"{sub}.").exists():
             return Response(
                 {"error": _("Tenant or domain already exists.")},
                 status=status.HTTP_409_CONFLICT
