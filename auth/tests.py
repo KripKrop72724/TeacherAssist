@@ -65,6 +65,8 @@ class CookieJWTAuthenticationTests(TestCase):
 class TenantValidationTests(TestCase):
     def setUp(self):
         self.client = APIClient()
+        self.public_tenant = Tenant.objects.create(schema_name="public", name="Public")
+        Domain.objects.create(tenant=self.public_tenant, domain="testserver", is_primary=True)
 
     def _create_domain(self, sub, base="example.com"):
         tenant = Tenant.objects.create(schema_name=sub, name=sub.capitalize())
