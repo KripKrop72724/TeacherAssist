@@ -1,8 +1,9 @@
-from django.test import TestCase, RequestFactory, SimpleTestCase
+from django.test import TestCase, RequestFactory
 from django.contrib.auth import get_user_model
 from rest_framework_simplejwt.tokens import RefreshToken, AccessToken
 from rest_framework.exceptions import AuthenticationFailed
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from django.conf import settings
 
@@ -20,22 +21,30 @@ class SchemaTokenSerializerTests(TestCase):
     def test_token_includes_schema(self):
         request = self.factory.post("/")
         request.tenant = SimpleNamespace(schema_name="tenant1")
-        ser = SchemaTokenObtainPairSerializer(
-            data={"username": "tester", "password": "pass123"},
-            context={"request": request},
-        )
-        self.assertTrue(ser.is_valid(), ser.errors)
-        access = AccessToken(ser.validated_data["access"])
-        self.assertEqual(access["schema"], "tenant1")
+        with patch(
+            "rest_framework_simplejwt.token_blacklist.models.OutstandingToken.objects.create"
+        ):
+            ser = SchemaTokenObtainPairSerializer(
+                data={"username": "tester", "password": "pass123"},
+                context={"request": request},
+            )
+            self.assertTrue(ser.is_valid(), ser.errors)
+            access = AccessToken(ser.validated_data["access"])
+            self.assertEqual(access["schema"], "tenant1")
 
 
-class CookieJWTAuthenticationTests(SimpleTestCase):
+class CookieJWTAuthenticationTests(TestCase):
     def setUp(self):
         self.factory = RequestFactory()
-        self.user = SimpleNamespace(id=1)
+        self.user = get_user_model().objects.create_user(
+            username="tester2", password="pass123"
+        )
 
     def test_schema_mismatch_rejects_token(self):
-        token = RefreshToken.for_user(self.user)
+        with patch(
+            "rest_framework_simplejwt.token_blacklist.models.OutstandingToken.objects.create"
+        ):
+            token = RefreshToken.for_user(self.user)
         token["schema"] = "tenant1"
         access = token.access_token
         access["schema"] = "tenant1"
