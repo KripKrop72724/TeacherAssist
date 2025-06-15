@@ -291,6 +291,7 @@ class AuthViewSet(viewsets.GenericViewSet):
             settings.SIMPLE_JWT["AUTH_COOKIE"],
             access,
             path="/",
+            domain=settings.COOKIE_DOMAIN,
             max_age=int(settings.SIMPLE_JWT["ACCESS_TOKEN_LIFETIME"].total_seconds()),
             secure=settings.SIMPLE_JWT["AUTH_COOKIE_SECURE"],
             httponly=settings.SIMPLE_JWT["AUTH_COOKIE_HTTP_ONLY"],
@@ -301,6 +302,7 @@ class AuthViewSet(viewsets.GenericViewSet):
                 settings.SIMPLE_JWT["REFRESH_COOKIE"],
                 new_ref,
                 path="/",
+                domain=settings.COOKIE_DOMAIN,
                 max_age=int(settings.SIMPLE_JWT["REFRESH_TOKEN_LIFETIME"].total_seconds()),
                 secure=settings.SIMPLE_JWT["REFRESH_COOKIE_SECURE"],
                 httponly=settings.SIMPLE_JWT["REFRESH_COOKIE_HTTP_ONLY"],
@@ -321,8 +323,16 @@ class AuthViewSet(viewsets.GenericViewSet):
                             status=status.HTTP_400_BAD_REQUEST)
 
         resp = Response({"detail": _("Logged out.")}, status=status.HTTP_200_OK)
-        resp.delete_cookie(settings.SIMPLE_JWT["AUTH_COOKIE"], path="/")
-        resp.delete_cookie(settings.SIMPLE_JWT["REFRESH_COOKIE"], path="/")
+        resp.delete_cookie(
+            settings.SIMPLE_JWT["AUTH_COOKIE"],
+            path="/",
+            domain=settings.COOKIE_DOMAIN
+        )
+        resp.delete_cookie(
+            settings.SIMPLE_JWT["REFRESH_COOKIE"],
+            path="/",
+            domain=settings.COOKIE_DOMAIN
+        )
         return resp
 
     @action(detail=False, methods=["get"], permission_classes=[AllowAny], authentication_classes=[])

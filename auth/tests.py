@@ -6,10 +6,11 @@ from rest_framework.exceptions import AuthenticationFailed
 from types import SimpleNamespace
 from unittest.mock import patch
 from rest_framework import status
-from rest_framework.test import APIClient
+from rest_framework.test import APIClient, APIRequestFactory, force_authenticate
 
 from django.conf import settings
 
+from auth.api_views import AuthViewSet
 from auth.serializers import SchemaTokenObtainPairSerializer
 from auth.authentication import CookieJWTAuthentication
 from tenants.models import Tenant, Domain
@@ -86,3 +87,47 @@ class TenantValidationTests(TestCase):
             url = reverse("auth:auth-create-tenant")
             resp = self.client.post(url, {"subdomain": "demo"})
         self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
+
+
+class CookieDomainTests(TestCase):
+    """Ensure refresh and logout respect settings.COOKIE_DOMAIN."""
+
+    @override_settings(COOKIE_DOMAIN=".test.com")
+    def test_refresh_sets_domain(self):
+        user = get_user_model().objects.create_user(
+            username="u", password="p", email="u@example.com"
+        )
+        refresh = RefreshToken.for_user(user)
+
+        factory = APIRequestFactory()
+        request = factory.post("/auth/refresh/", {"refresh": str(refresh)})
+
+        view = AuthViewSet.as_view({"post": "refresh"})
+        response = view(request)
+
+        auth_cookie = response.cookies[settings.SIMPLE_JWT["AUTH_COOKIE"]]
+        self.assertEqual(auth_cookie["domain"], settings.COOKIE_DOMAIN)
+
+        refresh_cookie = response.cookies[settings.SIMPLE_JWT["REFRESH_COOKIE"]]
+        self.assertEqual(refresh_cookie["domain"], settings.COOKIE_DOMAIN)
+
+    @override_settings(COOKIE_DOMAIN=".test.com")
+    def test_logout_deletes_domain(self):
+        user = get_user_model().objects.create_user(
+            username="x", password="y", email="x@example.com"
+        )
+        refresh = RefreshToken.for_user(user)
+
+        factory = APIRequestFactory()
+        request = factory.post("/auth/logout/")
+        request.COOKIES[settings.SIMPLE_JWT["REFRESH_COOKIE"]] = str(refresh)
+        force_authenticate(request, user=user)
+
+        view = AuthViewSet.as_view({"post": "logout"})
+        response = view(request)
+
+        auth_cookie = response.cookies[settings.SIMPLE_JWT["AUTH_COOKIE"]]
+        self.assertEqual(auth_cookie["domain"], settings.COOKIE_DOMAIN)
+
+        refresh_cookie = response.cookies[settings.SIMPLE_JWT["REFRESH_COOKIE"]]
+        self.assertEqual(refresh_cookie["domain"], settings.COOKIE_DOMAIN)
