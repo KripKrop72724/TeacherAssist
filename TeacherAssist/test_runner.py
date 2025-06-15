@@ -22,9 +22,6 @@ class TenantTestRunner(DiscoverRunner):
             schema_name="test_tenant",
             defaults={
                 "name": "Test Tenant",
-                # auto_create_schema=True on your model will
-                # cause django-tenants to generate the schema
-                "auto_create_schema": True,
             },
         )
 
