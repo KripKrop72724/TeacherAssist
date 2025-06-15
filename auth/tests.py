@@ -105,8 +105,6 @@ class CookieDomainTests(TestCase):
 
         view = AuthViewSet.as_view({"post": "refresh"})
         response = view(request)
-        with patch("rest_framework_simplejwt.tokens.BlacklistMixin.check_blacklist"):
-            response = view(request)
 
         auth_cookie = response.cookies[settings.SIMPLE_JWT["AUTH_COOKIE"]]
         self.assertEqual(auth_cookie["domain"], settings.COOKIE_DOMAIN)
@@ -129,9 +127,6 @@ class CookieDomainTests(TestCase):
 
         view = AuthViewSet.as_view({"post": "logout"})
         response = view(request)
-        with patch("rest_framework_simplejwt.tokens.BlacklistMixin.check_blacklist"), \
-             patch("rest_framework_simplejwt.tokens.RefreshToken.blacklist"):
-            response = view(request)
 
         auth_cookie = response.cookies[settings.SIMPLE_JWT["AUTH_COOKIE"]]
         self.assertEqual(auth_cookie["domain"], settings.COOKIE_DOMAIN)
