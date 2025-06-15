@@ -97,7 +97,8 @@ class CookieDomainTests(TestCase):
         user = get_user_model().objects.create_user(
             username="u", password="p", email="u@example.com"
         )
-        refresh = RefreshToken.for_user(user)
+        refresh = RefreshToken()
+        refresh["user_id"] = user.id
 
         factory = APIRequestFactory()
         request = factory.post("/auth/refresh/", {"refresh": str(refresh)})
@@ -116,7 +117,8 @@ class CookieDomainTests(TestCase):
         user = get_user_model().objects.create_user(
             username="x", password="y", email="x@example.com"
         )
-        refresh = RefreshToken.for_user(user)
+        refresh = RefreshToken()
+        refresh["user_id"] = user.id
 
         factory = APIRequestFactory()
         request = factory.post("/auth/logout/")
