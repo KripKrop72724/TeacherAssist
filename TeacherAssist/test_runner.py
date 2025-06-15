@@ -1,30 +1,45 @@
-# TeacherAssist/test_runner.py
-from django.test.runner import DiscoverRunner
 from django.core.management import call_command
+
+from TeacherAssist import settings
+from tenants.models import Tenant, Domain
+from django.test.runner import DiscoverRunner
+
 
 class TenantTestRunner(DiscoverRunner):
     """
-    Extends the default DiscoverRunner to also run
-    `migrate_schemas` on both shared and tenant schemas
-    so that `token_blacklist` tables exist everywhere.
+    1) Runs the normal test database setup (migrates public schema).
+    2) Creates a dummy tenant + its Domain.
+    3) Calls `migrate_schemas --schema_name=test_tenant` to build out the
+       tenant schema (including token_blacklist tables).
     """
 
     def setup_databases(self, **kwargs):
-        # 1) Create the test database(s) as normal
-        result = super().setup_databases(**kwargs)
+        # 1) public schema migrations & test DB setup
+        old_config = super().setup_databases(**kwargs)
 
-        # 2) Migrate the shared (public) schema
-        call_command(
-            "migrate_schemas",
-            "--shared",
-            interactive=False,
-            verbosity=1,
-        )
-        # 3) Migrate all tenant schemas
-        call_command(
-            "migrate_schemas",
-            interactive=False,
-            verbosity=1,
+        # 2) Create a dummy tenant
+        dummy, _ = Tenant.objects.get_or_create(
+            schema_name="test_tenant",
+            defaults={
+                "name": "Test Tenant",
+                # auto_create_schema=True on your model will
+                # cause django-tenants to generate the schema
+                "auto_create_schema": True,
+            },
         )
 
-        return result
+        Domain.objects.get_or_create(
+            tenant=dummy,
+            domain=f"test_tenant.{settings.TENANT_SUBDOMAIN_BASE}",
+            defaults={"is_primary": True},
+        )
+
+        # 3) Run tenant migrations for that schema
+        call_command(
+            "migrate_schemas",
+            schema_name="test_tenant",
+            interactive=False,
+            verbosity=0,
+        )
+
+        return old_config
