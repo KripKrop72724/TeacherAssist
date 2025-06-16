@@ -111,6 +111,9 @@ REST_FRAMEWORK = {
     'PAGE_SIZE': 30,
 }
 
+JWT_PRIVATE_KEY_PATH = env.str("JWT_PRIVATE_KEY_PATH",default="private.pem",)
+JWT_PUBLIC_KEY_PATH = env.str("JWT_PUBLIC_KEY_PATH",default="public.pem",)
+
 SPECTACULAR_SETTINGS = {
   'TITLE': 'TeacherAssist API',
   'VERSION': 'v1',
@@ -120,7 +123,9 @@ SPECTACULAR_SETTINGS = {
 }
 
 SIMPLE_JWT = {
-    # lifetimes
+    "ALGORITHM": "RS256",
+    "SIGNING_KEY": Path(JWT_PRIVATE_KEY_PATH).read_text(),
+    "VERIFYING_KEY": Path(JWT_PUBLIC_KEY_PATH).read_text(),
     'ACCESS_TOKEN_LIFETIME':  timedelta(hours=1),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
 

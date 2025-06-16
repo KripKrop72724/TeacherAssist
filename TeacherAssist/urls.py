@@ -19,6 +19,8 @@ from django.urls import path, include
 from django.http import JsonResponse
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
 
+from auth.jwks import JWKSView
+
 
 def root(request):
     return JsonResponse({
@@ -31,6 +33,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path("", root, name="root"),
     path('auth/', include('auth.urls', namespace='auth')),
+    path(".well-known/jwks.json", JWKSView.as_view(), name="jwks"),
 
 
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),

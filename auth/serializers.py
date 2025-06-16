@@ -159,3 +159,16 @@ class TwoFactorEnableSerializer(serializers.Serializer):
 
 class TwoFactorDisableSerializer(serializers.Serializer):
     otp = serializers.CharField(write_only=True)
+
+
+class JWKSerializer(serializers.Serializer):
+    kty = serializers.CharField(help_text="Key Type (e.g. 'RSA').")
+    use = serializers.CharField(help_text="How this key is used (e.g. 'sig' for signature).")
+    alg = serializers.CharField(help_text="RSA algorithm (e.g. 'RS256').")
+    kid = serializers.CharField(help_text="Key ID. Clients use this to select the correct key.")
+    n = serializers.CharField(help_text="The RSA modulus, base64url-encoded.")
+    e = serializers.CharField(help_text="The RSA public exponent, base64url-encoded.")
+
+
+class JWKSResponseSerializer(serializers.Serializer):
+    keys = serializers.ListField(child=JWKSerializer(),help_text="List of JSON Web Keys for JWT verification.")
