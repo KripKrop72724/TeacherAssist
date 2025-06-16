@@ -231,4 +231,4 @@ USE_TZ = True
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 TEST_RUNNER = "TeacherAssist.test_runner.TenantTestRunner"
-
+TEST_TENANT_SCHEMA_NAME = env.str("TEST_TENANT_SCHEMA_NAME", default="test_tenant")
