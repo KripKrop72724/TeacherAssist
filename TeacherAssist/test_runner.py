@@ -11,7 +11,7 @@ class TenantTestRunner(DiscoverRunner):
     1) Runs the normal test‐database setup (migrates public schema).
     2) Creates a dummy tenant + its Domain.
     3) Calls `migrate_schemas --schema_name=<TEST_TENANT_SCHEMA_NAME>`
-       to build out the tenant schema (including token_blacklist tables).
+       to build out the tenant schema.
     """
 
     def setup_databases(self, **kwargs):
@@ -32,7 +32,7 @@ class TenantTestRunner(DiscoverRunner):
             defaults={"is_primary": True},
         )
 
-        # 3) Run tenant migrations (so token_blacklist & all TENANT_APPS land there)
+        # 3) Run tenant migrations (so all TENANT_APPS land there)
         call_command(
             "migrate_schemas",
             schema_name=test_schema,

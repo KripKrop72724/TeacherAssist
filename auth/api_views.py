@@ -18,6 +18,7 @@ from auth.serializers import LoginSerializer, RefreshSerializer, LogoutSerialize
     TenantCreateResponseSerializer, CheckTenantSerializer, UserRegisterSerializer, UserDetailSerializer, \
     TwoFactorEnableSerializer, TwoFactorDisableSerializer, TwoFactorSetupSerializer
 from auth.throttles import ConditionalScopeThrottle
+from auth.blacklist import blacklist_jti, is_jti_blacklisted
 from tenants.models import Tenant, Domain
 from django.utils.translation import gettext_lazy as _
 
@@ -273,12 +274,23 @@ class AuthViewSet(viewsets.GenericViewSet):
             return Response({"error": _("No refresh token provided.")},
                             status=status.HTTP_400_BAD_REQUEST)
 
+        try:
+            token_obj = RefreshToken(refresh_token)
+        except TokenError as e:
+            return Response({"error": _("Invalid refresh token."), "details": str(e)},
+                            status=status.HTTP_401_UNAUTHORIZED)
+
+        if is_jti_blacklisted(token_obj["jti"]):
+            return Response({"error": _("Invalid refresh token.")},
+                            status=status.HTTP_401_UNAUTHORIZED)
+
         serializer = TokenRefreshSerializer(data={"refresh": refresh_token})
         try:
             serializer.is_valid(raise_exception=True)
         except TokenError as e:
             return Response({"error": _("Invalid refresh token."), "details": str(e)},
                             status=status.HTTP_401_UNAUTHORIZED)
+        blacklist_jti(token_obj["jti"], token_obj["exp"])
 
         access  = serializer.validated_data["access"]
         data    = {"access": access}
@@ -317,10 +329,11 @@ class AuthViewSet(viewsets.GenericViewSet):
             return Response({"error": _("No refresh token in cookies.")},
                             status=status.HTTP_400_BAD_REQUEST)
         try:
-            RefreshToken(token).blacklist()
+            rt = RefreshToken(token)
         except TokenError as e:
             return Response({"error": _("Failed to blacklist token."), _("details"): _(str(e))},
                             status=status.HTTP_400_BAD_REQUEST)
+        blacklist_jti(rt["jti"], rt["exp"])
 
         resp = Response({"detail": _("Logged out.")}, status=status.HTTP_200_OK)
         resp.delete_cookie(

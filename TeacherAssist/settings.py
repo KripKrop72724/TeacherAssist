@@ -75,7 +75,6 @@ TENANT_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "rest_framework",
-    "rest_framework_simplejwt.token_blacklist",
     "auth.apps.AuthConfig",
     "drf_spectacular",
 ]
@@ -237,3 +236,4 @@ USE_TZ = True
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 TEST_RUNNER = "TeacherAssist.test_runner.TenantTestRunner"
 TEST_TENANT_SCHEMA_NAME = env.str("TEST_TENANT_SCHEMA_NAME", default="test_tenant")
+REDIS_URL = env.str("REDIS_URL", default="redis://localhost:6379/0")
