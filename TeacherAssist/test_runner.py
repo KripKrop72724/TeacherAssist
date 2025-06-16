@@ -33,7 +33,7 @@ class TenantTestRunner(DiscoverRunner):
         # 3) Run tenant migrations for that schema (includes token_blacklist)
         call_command(
             "migrate_schemas",
-            schema_name=test_schema,
+            schema_name=getattr(settings, "PUBLIC_SCHEMA_NAME", "public"),
             interactive=False,
             verbosity=0,
         )
