@@ -14,7 +14,7 @@ from auth.api_views import AuthViewSet
 from auth.serializers import SchemaTokenObtainPairSerializer
 from auth.authentication import CookieJWTAuthentication
 from tenants.models import Tenant, Domain
-
+from django_tenants.test.client import TenantClient
 
 class SchemaTokenSerializerTests(TestCase):
     def setUp(self):
@@ -90,46 +90,51 @@ class TenantValidationTests(TestCase):
 
 
 class CookieDomainTests(TestCase):
-    """Ensure refresh and logout respect settings.COOKIE_DOMAIN."""
+    @classmethod
+    def setUpTestData(cls):
+        # Create your dummy tenant exactly as your runner does
+        cls.tenant = Tenant.objects.create(schema_name="demo", name="Demo")
+        Domain.objects.create(
+            tenant=cls.tenant,
+            domain=f"demo.{settings.TENANT_SUBDOMAIN_BASE}",
+            is_primary=True
+        )
+        # Use TenantClient to automatically set HTTP_HOST and run the middleware
+        cls.client = TenantClient(cls.tenant, HTTP_HOST=f"demo.{settings.TENANT_SUBDOMAIN_BASE}")
 
     @override_settings(COOKIE_DOMAIN=".test.com")
     def test_refresh_sets_domain(self):
-        user = get_user_model().objects.create_user(
-            username="u", password="p", email="u@example.com"
+        # Create a user *in the tenant schema*
+        with self.client.schema_context():
+            user = get_user_model().objects.create_user(username="u", password="p")
+            rt = RefreshToken.for_user(user)
+
+        # Now hit /auth/refresh/ under that tenant
+        resp = self.client.post(
+            "/auth/refresh/",
+            {"refresh": str(rt)},
+            format="json"
         )
-        refresh = RefreshToken()
-        refresh["user_id"] = user.id
-
-        factory = APIRequestFactory()
-        request = factory.post("/auth/refresh/", {"refresh": str(refresh)})
-
-        view = AuthViewSet.as_view({"post": "refresh"})
-        response = view(request)
-
-        auth_cookie = response.cookies[settings.SIMPLE_JWT["AUTH_COOKIE"]]
+        self.assertEqual(resp.status_code, 200)
+        # Domain assertions follow
+        auth_cookie = resp.cookies[settings.SIMPLE_JWT["AUTH_COOKIE"]]
         self.assertEqual(auth_cookie["domain"], settings.COOKIE_DOMAIN)
-
-        refresh_cookie = response.cookies[settings.SIMPLE_JWT["REFRESH_COOKIE"]]
+        refresh_cookie = resp.cookies[settings.SIMPLE_JWT["REFRESH_COOKIE"]]
         self.assertEqual(refresh_cookie["domain"], settings.COOKIE_DOMAIN)
 
     @override_settings(COOKIE_DOMAIN=".test.com")
     def test_logout_deletes_domain(self):
-        user = get_user_model().objects.create_user(
-            username="x", password="y", email="x@example.com"
-        )
-        refresh = RefreshToken()
-        refresh["user_id"] = user.id
+        # Create & authenticate user in tenant
+        with self.client.schema_context():
+            user = get_user_model().objects.create_user(username="x", password="y")
+            rt = RefreshToken.for_user(user)
 
-        factory = APIRequestFactory()
-        request = factory.post("/auth/logout/")
-        request.COOKIES[settings.SIMPLE_JWT["REFRESH_COOKIE"]] = str(refresh)
-        force_authenticate(request, user=user)
-
-        view = AuthViewSet.as_view({"post": "logout"})
-        response = view(request)
-
-        auth_cookie = response.cookies[settings.SIMPLE_JWT["AUTH_COOKIE"]]
+        # Log them in
+        self.client.cookies[settings.SIMPLE_JWT["REFRESH_COOKIE"]] = str(rt)
+        resp = self.client.post("/auth/logout/")
+        self.assertEqual(resp.status_code, 200)
+        # Domain assertions
+        auth_cookie = resp.cookies[settings.SIMPLE_JWT["AUTH_COOKIE"]]
         self.assertEqual(auth_cookie["domain"], settings.COOKIE_DOMAIN)
-
-        refresh_cookie = response.cookies[settings.SIMPLE_JWT["REFRESH_COOKIE"]]
+        refresh_cookie = resp.cookies[settings.SIMPLE_JWT["REFRESH_COOKIE"]]
         self.assertEqual(refresh_cookie["domain"], settings.COOKIE_DOMAIN)
