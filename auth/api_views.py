@@ -310,7 +310,7 @@ class AuthViewSet(viewsets.GenericViewSet):
             )
         return resp
 
-    @action(detail=False, methods=["post"], permission_classes=[IsAuthenticated])
+    @action(detail=False, methods=["post"], permission_classes=[AllowAny], authentication_classes=[])
     def logout(self, request):
         token = request.COOKIES.get(settings.SIMPLE_JWT["REFRESH_COOKIE"])
         if not token:
