@@ -183,7 +183,7 @@ class AuthViewSet(viewsets.GenericViewSet):
 
     @action(detail=False, methods=["post"], permission_classes=[AllowAny], authentication_classes=[])
     def login(self, request):
-        inp = LoginSerializer(data=request.data)
+        inp = LoginSerializer(data=request.data, context={"request": request})
         inp.is_valid(raise_exception=True)
         user = inp.validated_data["user"]
         access = inp.validated_data["access"]
