@@ -1,3 +1,4 @@
+from django.db import connection
 from django.test import TestCase, RequestFactory, override_settings
 from django.contrib.auth import get_user_model
 from django.urls import reverse
@@ -66,9 +67,18 @@ class CookieJWTAuthenticationTests(TestCase):
 
 class TenantValidationTests(TestCase):
     def setUp(self):
+        # Make sure we’re back in the public schema before creating any tenants
+        connection.set_schema_to_public()
         self.client = APIClient()
-        self.public_tenant = Tenant.objects.create(schema_name="public", name="Public")
-        Domain.objects.create(tenant=self.public_tenant, domain="testserver", is_primary=True)
+        self.public_tenant = Tenant.objects.create(
+            schema_name="public",
+            name="Public",
+        )
+        Domain.objects.create(
+            tenant=self.public_tenant,
+            domain="testserver",
+            is_primary=True,
+        )
 
     def _create_domain(self, sub, base="example.com"):
         tenant = Tenant.objects.create(schema_name=sub, name=sub.capitalize())
