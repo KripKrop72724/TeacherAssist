@@ -8,7 +8,7 @@ class AuthConfig(AppConfig):
 
     def ready(self):
         import auth.blacklist as rb
-        from rest_framework_simplejwt.tokens import RefreshToken, Token
+        from rest_framework_simplejwt.tokens import RefreshToken
         from rest_framework_simplejwt.exceptions import TokenError
 
         def _outstanding(self):
@@ -19,11 +19,12 @@ class AuthConfig(AppConfig):
             exp = self.get("exp")
             rb.blacklist_jti(jti, exp)
 
-        def _check_blacklist(self):
+        def _check(self):
             jti = self.get("jti")
             if rb.is_jti_blacklisted(jti):
                 raise TokenError("Token is blacklisted")
 
-        RefreshToken.outstanding = _outstanding
-        RefreshToken.blacklist   = _blacklist
-        RefreshToken.check_blacklist = _check_blacklist
+        RefreshToken.outstanding      = _outstanding
+        RefreshToken.outstand         = _outstanding
+        RefreshToken.blacklist        = _blacklist
+        RefreshToken.check_blacklist  = _check
