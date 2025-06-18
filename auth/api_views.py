@@ -9,18 +9,48 @@ from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework_simplejwt.exceptions import TokenError, InvalidToken
-from rest_framework_simplejwt.serializers import (TokenObtainPairSerializer,TokenRefreshSerializer)
+from rest_framework_simplejwt.serializers import (
+    TokenObtainPairSerializer,
+    TokenRefreshSerializer,
+)
 from rest_framework_simplejwt.tokens import RefreshToken
-from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiResponse, OpenApiParameter
+from drf_spectacular.utils import (
+    extend_schema,
+    extend_schema_view,
+    OpenApiResponse,
+    OpenApiParameter,
+)
 from auth.authentication import CookieJWTAuthentication
 from auth.models import TwoFactor
-from auth.serializers import LoginSerializer, RefreshSerializer, LogoutSerializer, TenantCreateSerializer, \
-    TenantCreateResponseSerializer, CheckTenantSerializer, UserRegisterSerializer, UserDetailSerializer, \
-    TwoFactorEnableSerializer, TwoFactorDisableSerializer, TwoFactorSetupSerializer
+from auth.serializers import (
+    LoginSerializer,
+    RefreshSerializer,
+    LogoutSerializer,
+    TenantCreateSerializer,
+    TenantCreateResponseSerializer,
+    CheckTenantSerializer,
+    UserRegisterSerializer,
+    UserDetailSerializer,
+    TwoFactorEnableSerializer,
+    TwoFactorDisableSerializer,
+    TwoFactorSetupSerializer,
+)
 from auth.throttles import ConditionalScopeThrottle
+from auth.csrf import DoubleSubmitCSRF, set_csrf_cookie
 from auth.blacklist import blacklist_jti, is_jti_blacklisted
 from tenants.models import Tenant, Domain
 from django.utils.translation import gettext_lazy as _
+
+# OpenAPI parameter describing the required CSRF header for state-changing
+# endpoints protected by ``DoubleSubmitCSRF``.
+csrf_header_param = OpenApiParameter(
+    name="X-CSRFToken",
+    type=str,
+    location=OpenApiParameter.HEADER,
+    required=True,
+    description="CSRF token value that must match the `csrftoken` cookie",
+)
+
 
 @extend_schema_view(
     login=extend_schema(
@@ -51,17 +81,19 @@ from django.utils.translation import gettext_lazy as _
         responses={
             200: OpenApiResponse(
                 response=RefreshSerializer,
-                description="Returns `{ access }` and updates access_token cookie."
+                description="Returns `{ access }` and updates access_token cookie.",
             ),
             400: OpenApiResponse(description="No refresh token provided."),
             401: OpenApiResponse(description="Invalid refresh token."),
         },
+        parameters=[csrf_header_param],
     ),
     logout=extend_schema(
         summary="Logout user",
         description="Blacklist the refresh token (from cookie) and clear both access + refresh cookies.",
         request=LogoutSerializer,
         responses={200: OpenApiResponse(description="Logged out successfully.")},
+        parameters=[csrf_header_param],
     ),
     create_tenant=extend_schema(
         summary="Onboard a new tenant",
@@ -79,6 +111,7 @@ from django.utils.translation import gettext_lazy as _
             429: OpenApiResponse(description="Rate limit exceeded"),
             500: OpenApiResponse(description="Internal server error"),
         },
+        parameters=[csrf_header_param],
     ),
     check_tenant=extend_schema(
         summary="Check tenant subdomain availability",
@@ -92,7 +125,7 @@ from django.utils.translation import gettext_lazy as _
                 type=str,
                 location=OpenApiParameter.QUERY,
                 required=True,
-                description="Subdomain to check (alphanumeric, 1–50 chars)."
+                description="Subdomain to check (alphanumeric, 1–50 chars).",
             )
         ],
         responses={
@@ -111,10 +144,13 @@ from django.utils.translation import gettext_lazy as _
         ),
         request=UserRegisterSerializer,
         responses={
-            201: OpenApiResponse(response=UserDetailSerializer, description="User created"),
+            201: OpenApiResponse(
+                response=UserDetailSerializer, description="User created"
+            ),
             400: OpenApiResponse(description="Validation error"),
             429: OpenApiResponse(description="Rate limit exceeded"),
         },
+        parameters=[csrf_header_param],
     ),
     two_factor_setup=extend_schema(
         summary="Initialize TOTP 2FA setup",
@@ -134,6 +170,7 @@ from django.utils.translation import gettext_lazy as _
         ),
         request=TwoFactorEnableSerializer,
         responses={200: OpenApiResponse(description="2FA enabled successfully")},
+        parameters=[csrf_header_param],
     ),
     two_factor_disable=extend_schema(
         summary="Disable TOTP 2FA",
@@ -144,9 +181,9 @@ from django.utils.translation import gettext_lazy as _
         ),
         request=TwoFactorDisableSerializer,
         responses={200: OpenApiResponse(description="2FA disabled successfully")},
+        parameters=[csrf_header_param],
     ),
 )
-
 class AuthViewSet(viewsets.GenericViewSet):
     """
     Handles **authentication**, **tenant management**, **user registration**, and **optional TOTP-based 2FA**.
@@ -178,9 +215,10 @@ class AuthViewSet(viewsets.GenericViewSet):
     9. **2FA Disable** (`POST /auth/two_factor_disable/`)
        Verify TOTP code to deactivate 2FA.
     """
+
     authentication_classes = [CookieJWTAuthentication]
-    permission_classes     = [AllowAny]
-    throttle_classes       = [ConditionalScopeThrottle]
+    permission_classes = [AllowAny]
+    throttle_classes = [ConditionalScopeThrottle]
 
     @action(detail=False, methods=["post"], permission_classes=[AllowAny], authentication_classes=[])
     def login(self, request):
@@ -200,29 +238,31 @@ class AuthViewSet(viewsets.GenericViewSet):
             token = inp.validated_data[ck == "AUTH_COOKIE" and "access" or "refresh"]
 
             resp.set_cookie(
-                name, token,
+                name,
+                token,
                 domain=settings.COOKIE_DOMAIN,
-                path="/", max_age=int(lifetime.total_seconds()),
+                path="/",
+                max_age=int(lifetime.total_seconds()),
                 secure=settings.SIMPLE_JWT[f"{ck}_SECURE"],
                 httponly=settings.SIMPLE_JWT[f"{ck}_HTTP_ONLY"],
                 samesite=settings.SIMPLE_JWT[f"{ck}_SAMESITE"],
             )
+        set_csrf_cookie(resp)
         return resp
 
     @action(detail=False, methods=["get"], permission_classes=[IsAuthenticated])
     def two_factor_setup(self, request):
         user = request.user
         tf, created = TwoFactor.objects.get_or_create(
-            user=user,
-            defaults={"secret": pyotp.random_base32()}
+            user=user, defaults={"secret": pyotp.random_base32()}
         )
         data = {
-            "secret":           tf.secret,
+            "secret": tf.secret,
             "provisioning_uri": tf.provisioning_uri(),
         }
         return Response(data, status=status.HTTP_200_OK)
 
-    @action(detail=False, methods=["post"], permission_classes=[IsAuthenticated])
+    @action(detail=False, methods=["post"], permission_classes=[IsAuthenticated, DoubleSubmitCSRF])
     def two_factor_enable(self, request):
         user = request.user
         serializer = TwoFactorEnableSerializer(data=request.data)
@@ -231,19 +271,21 @@ class AuthViewSet(viewsets.GenericViewSet):
         try:
             tf = user.two_factor
         except TwoFactor.DoesNotExist:
-            return Response({"error":"Call setup first."},
-                            status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error":"Call setup first."},status=status.HTTP_400_BAD_REQUEST
+            )
 
         otp = serializer.validated_data["otp"]
         if not tf.get_totp().verify(otp):
-            return Response({"error":"Invalid code."},
-                            status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error":"Invalid code."}, status=status.HTTP_400_BAD_REQUEST
+            )
 
         tf.enabled = True
         tf.save(update_fields=["enabled"])
         return Response({"detail":"2FA enabled."}, status=status.HTTP_200_OK)
 
-    @action(detail=False, methods=["post"], permission_classes=[IsAuthenticated])
+    @action(detail=False, methods=["post"], permission_classes=[IsAuthenticated, DoubleSubmitCSRF])
     def two_factor_disable(self, request):
         user = request.user
         serializer = TwoFactorDisableSerializer(data=request.data)
@@ -264,7 +306,7 @@ class AuthViewSet(viewsets.GenericViewSet):
         tf.save(update_fields=["enabled"])
         return Response({"detail":"2FA disabled."}, status=status.HTTP_200_OK)
 
-    @action(detail=False, methods=["post"], permission_classes=[AllowAny], authentication_classes=[])
+    @action(detail=False, methods=["post"], permission_classes=[AllowAny, DoubleSubmitCSRF], authentication_classes=[])
     def refresh(self, request):
         refresh_token = (
             request.data.get("refresh")
@@ -320,9 +362,10 @@ class AuthViewSet(viewsets.GenericViewSet):
                 httponly=settings.SIMPLE_JWT["REFRESH_COOKIE_HTTP_ONLY"],
                 samesite=settings.SIMPLE_JWT["REFRESH_COOKIE_SAMESITE"],
             )
+        set_csrf_cookie(resp)
         return resp
 
-    @action(detail=False, methods=["post"], permission_classes=[AllowAny], authentication_classes=[])
+    @action(detail=False, methods=["post"], permission_classes=[AllowAny, DoubleSubmitCSRF], authentication_classes=[])
     def logout(self, request):
         token = request.COOKIES.get(settings.SIMPLE_JWT["REFRESH_COOKIE"])
         if not token:
@@ -346,6 +389,7 @@ class AuthViewSet(viewsets.GenericViewSet):
             path="/",
             domain=settings.COOKIE_DOMAIN
         )
+        set_csrf_cookie(resp)
         return resp
 
     @action(detail=False, methods=["get"], permission_classes=[AllowAny], authentication_classes=[])
@@ -374,7 +418,7 @@ class AuthViewSet(viewsets.GenericViewSet):
 
         return Response({"available": True}, status=status.HTTP_200_OK)
 
-    @action(detail=False, methods=["post"], permission_classes=[AllowAny], authentication_classes=[])
+    @action(detail=False, methods=["post"], permission_classes=[AllowAny, DoubleSubmitCSRF], authentication_classes=[])
     def create_tenant(self, request):
         raw = request.data.get("subdomain", "")
         sub = str(raw).strip().lower()
@@ -473,7 +517,7 @@ class AuthViewSet(viewsets.GenericViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-        return Response(
+        resp = Response(
             {
                 "message": _("Tenant created successfully."),
                 "schema":  sub,
@@ -481,11 +525,15 @@ class AuthViewSet(viewsets.GenericViewSet):
             },
             status=status.HTTP_201_CREATED
         )
+        set_csrf_cookie(resp)
+        return resp
 
-    @action(detail=False, methods=["post"], permission_classes=[AllowAny], authentication_classes=[])
+    @action(detail=False, methods=["post"], permission_classes=[AllowAny, DoubleSubmitCSRF], authentication_classes=[])
     def register(self, request):
         serializer = UserRegisterSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
         out = UserDetailSerializer(user)
-        return Response(out.data, status=status.HTTP_201_CREATED)
+        resp = Response(out.data, status=status.HTTP_201_CREATED)
+        set_csrf_cookie(resp)
+        return resp
