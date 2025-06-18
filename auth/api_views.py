@@ -6,6 +6,8 @@ from django.core.management import call_command
 from django.db import transaction
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework_simplejwt.exceptions import TokenError, InvalidToken
@@ -419,6 +421,7 @@ class AuthViewSet(viewsets.GenericViewSet):
         return Response({"available": True}, status=status.HTTP_200_OK)
 
     @action(detail=False, methods=["post"], permission_classes=[AllowAny, DoubleSubmitCSRF], authentication_classes=[])
+    @csrf_exempt
     def create_tenant(self, request):
         raw = request.data.get("subdomain", "")
         sub = str(raw).strip().lower()

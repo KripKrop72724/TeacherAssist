@@ -170,6 +170,13 @@ class CookieDomainTests(TestCase):
 class CsrfRequiredTests(TestCase):
     @classmethod
     def setUpTestData(cls):
+        connection.set_schema_to_public()
+        cls.public_tenant, _ = Tenant.objects.get_or_create(schema_name="public", defaults={"name": "Public"})
+        Domain.objects.get_or_create(
+            tenant=cls.public_tenant,
+            domain="testserver",
+            defaults={"is_primary": True},
+        )
         cls.tenant = Tenant.objects.create(schema_name="demo2", name="Demo2")
         Domain.objects.create(
             tenant=cls.tenant,
