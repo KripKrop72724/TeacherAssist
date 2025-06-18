@@ -4,7 +4,7 @@ import requests
 from django.conf import settings
 from django.core.management import call_command
 from django.db import transaction
-from rest_framework import status, viewsets
+from rest_framework import status, viewsets, serializers
 from rest_framework.decorators import action
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
@@ -225,7 +225,12 @@ class AuthViewSet(viewsets.GenericViewSet):
     @action(detail=False, methods=["post"], permission_classes=[AllowAny], authentication_classes=[])
     def login(self, request):
         inp = LoginSerializer(data=request.data, context={"request": request})
-        inp.is_valid(raise_exception=True)
+        try:
+            inp.is_valid(raise_exception=True)
+        except serializers.ValidationError as exc:
+            if "otp" in exc.detail and exc.detail["otp"] == ["Two-factor code required."]:
+                return Response({"otp_required": True}, status=status.HTTP_403_FORBIDDEN)
+            raise
         user = inp.validated_data["user"]
         access = inp.validated_data["access"]
         refresh = inp.validated_data["refresh"]

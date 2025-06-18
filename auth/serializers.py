@@ -6,6 +6,7 @@ from rest_framework_simplejwt.serializers import (
     TokenObtainPairSerializer,
     TokenRefreshSerializer,
 )
+from rest_framework.exceptions import AuthenticationFailed
 from django.contrib.auth import get_user_model, password_validation
 
 from auth.models import TwoFactor
@@ -43,7 +44,10 @@ class LoginSerializer(serializers.Serializer):
             },
             context={"request": self.context.get("request")},
         )
-        jwt_ser.is_valid(raise_exception=True)
+        try:
+            jwt_ser.is_valid(raise_exception=True)
+        except AuthenticationFailed:
+            raise serializers.ValidationError({"non_field_errors": [_("Invalid credentials.")]})
         user   = jwt_ser.user
         access = jwt_ser.validated_data["access"]
         refresh= jwt_ser.validated_data["refresh"]

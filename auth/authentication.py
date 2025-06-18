@@ -1,6 +1,7 @@
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.exceptions import InvalidToken
 from rest_framework.exceptions import AuthenticationFailed
+from rest_framework import HTTP_HEADER_ENCODING
 
 class CookieJWTAuthentication(JWTAuthentication):
     """
@@ -30,6 +31,15 @@ class CookieJWTAuthentication(JWTAuthentication):
 
     def authenticate_header(self, request):
         return "Bearer"
+
+    def get_header(self, request):
+        header = super().get_header(request)
+        if header is None:
+            auth = request.headers.get("Authorization")
+            if isinstance(auth, str):
+                auth = auth.encode(HTTP_HEADER_ENCODING)
+            header = auth
+        return header
 
     @classmethod
     def get_cookie_name(cls):

@@ -364,6 +364,7 @@ class LoginFlowTests(TestCase):
 class RefreshFlowTests(TestCase):
     @classmethod
     def setUpTestData(cls):
+        connection.set_schema_to_public()
         cls.tenant = Tenant.objects.create(schema_name="demo4", name="Demo4")
         Domain.objects.create(
             tenant=cls.tenant,
@@ -453,6 +454,7 @@ class RefreshFlowTests(TestCase):
 class LogoutFlowTests(TestCase):
     @classmethod
     def setUpTestData(cls):
+        connection.set_schema_to_public()
         cls.tenant = Tenant.objects.create(schema_name="demo5", name="Demo5")
         Domain.objects.create(
             tenant=cls.tenant,
@@ -499,6 +501,7 @@ class LogoutFlowTests(TestCase):
 class RegisterFlowTests(TestCase):
     @classmethod
     def setUpTestData(cls):
+        connection.set_schema_to_public()
         cls.tenant = Tenant.objects.create(schema_name="demo6", name="Demo6")
         Domain.objects.create(
             tenant=cls.tenant,
@@ -631,6 +634,7 @@ class TenantCreationTests(TestCase):
 class TwoFactorTests(TestCase):
     @classmethod
     def setUpTestData(cls):
+        connection.set_schema_to_public()
         cls.tenant = Tenant.objects.create(schema_name="demo7", name="Demo7")
         Domain.objects.create(
             tenant=cls.tenant,
@@ -648,7 +652,8 @@ class TwoFactorTests(TestCase):
         request.tenant = self.tenant
         force_authenticate(request, user=self.user)
         view = AuthViewSet.as_view({method: path.split('/')[-2]})
-        return view(request)
+        with tenant_context(self.tenant):
+            return view(request)
 
     def test_setup_idempotent(self):
         resp1 = self._force_auth("get", "/auth/two_factor_setup/")
@@ -689,6 +694,7 @@ class TwoFactorTests(TestCase):
 
 class JWKSViewTests(TestCase):
     def test_jwks_fetch(self):
+        connection.set_schema_to_public()
         Path("public.pem").write_text(Path("public.pem").read_text())
         resp = APIClient().get("/.well-known/jwks.json")
         self.assertEqual(resp.status_code, 200)
