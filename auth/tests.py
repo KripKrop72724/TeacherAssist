@@ -205,11 +205,53 @@ class CsrfRequiredTests(TestCase):
         resp = self.client.post("/auth/refresh/", {"refresh": str(rt)}, format="json")
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
 
+    def test_refresh_mismatched_token_fails(self):
+        rt = self._create_user_with_rt()
+        cookie_token = generate_csrf_token()
+        header_token = generate_csrf_token()
+        self.client.cookies[settings.CSRF_COOKIE_NAME] = cookie_token
+        resp = self.client.post(
+            "/auth/refresh/",
+            {"refresh": str(rt)},
+            format="json",
+            HTTP_X_CSRFTOKEN=header_token,
+        )
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_refresh_matching_token_succeeds(self):
+        rt = self._create_user_with_rt()
+        token = generate_csrf_token()
+        self.client.cookies[settings.CSRF_COOKIE_NAME] = token
+        resp = self.client.post(
+            "/auth/refresh/",
+            {"refresh": str(rt)},
+            format="json",
+            HTTP_X_CSRFTOKEN=token,
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+
     def test_logout_without_csrf_fails(self):
         rt = self._create_user_with_rt()
         self.client.cookies[settings.SIMPLE_JWT["REFRESH_COOKIE"]] = str(rt)
         resp = self.client.post("/auth/logout/")
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_logout_mismatched_token_fails(self):
+        rt = self._create_user_with_rt()
+        self.client.cookies[settings.SIMPLE_JWT["REFRESH_COOKIE"]] = str(rt)
+        cookie_token = generate_csrf_token()
+        header_token = generate_csrf_token()
+        self.client.cookies[settings.CSRF_COOKIE_NAME] = cookie_token
+        resp = self.client.post("/auth/logout/", HTTP_X_CSRFTOKEN=header_token)
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_logout_matching_token_succeeds(self):
+        rt = self._create_user_with_rt()
+        self.client.cookies[settings.SIMPLE_JWT["REFRESH_COOKIE"]] = str(rt)
+        token = generate_csrf_token()
+        self.client.cookies[settings.CSRF_COOKIE_NAME] = token
+        resp = self.client.post("/auth/logout/", HTTP_X_CSRFTOKEN=token)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
 
     @override_settings(TENANT_CREATION_REQUIRE_CAPTCHA=False)
     def test_create_tenant_requires_csrf(self):

@@ -13,7 +13,10 @@ class DoubleSubmitCSRF(BasePermission):
         if request.method in ("GET", "HEAD", "OPTIONS"):
             return True
         header_token = request.headers.get("X-CSRFToken")
-        return bool(header_token)
+        cookie_token = request.COOKIES.get(settings.CSRF_COOKIE_NAME)
+        if not header_token or not cookie_token:
+            return False
+        return hmac.compare_digest(str(cookie_token), str(header_token))
 
 
 def generate_csrf_token():
