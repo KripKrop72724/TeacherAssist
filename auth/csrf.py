@@ -20,7 +20,7 @@ class DoubleSubmitCSRF(BasePermission):
 
 
 def generate_csrf_token():
-    return secrets.token_urlsafe(32)
+    return secrets.token_hex(32)
 
 
 def set_csrf_cookie(response, token=None):
