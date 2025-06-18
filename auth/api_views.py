@@ -324,7 +324,8 @@ class AuthViewSet(viewsets.GenericViewSet):
             return Response({"error": _("Invalid refresh token."), "details": str(e)},
                             status=status.HTTP_401_UNAUTHORIZED)
 
-        if is_jti_blacklisted(token_obj["jti"]):
+        schema = request.tenant.schema_name
+        if is_jti_blacklisted(token_obj["jti"], schema):
             return Response({"error": _("Invalid refresh token.")},
                             status=status.HTTP_401_UNAUTHORIZED)
 
@@ -334,7 +335,7 @@ class AuthViewSet(viewsets.GenericViewSet):
         except TokenError as e:
             return Response({"error": _("Invalid refresh token."), "details": str(e)},
                             status=status.HTTP_401_UNAUTHORIZED)
-        blacklist_jti(token_obj["jti"], token_obj["exp"])
+        blacklist_jti(token_obj["jti"], token_obj["exp"], schema)
 
         access  = serializer.validated_data["access"]
         data    = {"access": access}
@@ -378,7 +379,7 @@ class AuthViewSet(viewsets.GenericViewSet):
         except TokenError as e:
             return Response({"error": _("Failed to blacklist token."), _("details"): _(str(e))},
                             status=status.HTTP_400_BAD_REQUEST)
-        blacklist_jti(rt["jti"], rt["exp"])
+        blacklist_jti(rt["jti"], rt["exp"], request.tenant.schema_name)
 
         resp = Response({"detail": _("Logged out.")}, status=status.HTTP_200_OK)
         resp.delete_cookie(

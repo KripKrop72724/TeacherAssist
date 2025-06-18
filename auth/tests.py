@@ -11,6 +11,8 @@ from rest_framework import status
 from rest_framework.test import APIClient, APIRequestFactory, force_authenticate
 from auth.csrf import generate_csrf_token
 from django.conf import settings
+from auth.blacklist import blacklist_jti, is_jti_blacklisted
+import time
 
 from auth.api_views import AuthViewSet
 from auth.serializers import SchemaTokenObtainPairSerializer
@@ -214,3 +216,13 @@ class CsrfRequiredTests(TestCase):
         connection.set_schema_to_public()
         resp = APIClient().post(reverse("auth:auth-create-tenant"), {"subdomain": "x"})
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+
+class BlacklistIsolationTests(TestCase):
+    def test_isolation_across_schemas(self):
+        jti = "dummyjti"
+        now = time.time() + 60
+        blacklist_jti(jti, now, "tenant1")
+        self.assertTrue(is_jti_blacklisted(jti, "tenant1"))
+        self.assertFalse(is_jti_blacklisted(jti, "tenant2"))
+

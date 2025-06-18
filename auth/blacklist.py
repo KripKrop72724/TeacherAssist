@@ -11,18 +11,17 @@ def _get_client():
         _client = redis.Redis.from_url(settings.REDIS_URL)
     return _client
 
-KEY_PREFIX = "blacklist:"
+KEY_PREFIX = "blacklist"
 
-def blacklist_jti(jti: str, exp_timestamp: int) -> None:
-    """
-    Store jti in Redis with a TTL that matches its expiry.
-    """
+def _make_key(schema: str, jti: str) -> str:
+    return f"{KEY_PREFIX}:{schema}:{jti}"
+
+def blacklist_jti(jti: str, exp_timestamp: int, schema: str) -> None:
+    """Store jti for the given tenant schema with a TTL matching its expiry."""
     ttl = int(exp_timestamp - time.time())
     if ttl > 0:
-        _get_client().setex(KEY_PREFIX + jti, ttl, "1")
+        _get_client().setex(_make_key(schema, jti), ttl, "1")
 
-def is_jti_blacklisted(jti: str) -> bool:
-    """
-    Returns True if that jti is in the Redis set (i.e. we told Redis to expire it).
-    """
-    return bool(_get_client().exists(KEY_PREFIX + jti))
+def is_jti_blacklisted(jti: str, schema: str) -> bool:
+    """Return True if the jti for the tenant schema is present in Redis."""
+    return bool(_get_client().exists(_make_key(schema, jti)))

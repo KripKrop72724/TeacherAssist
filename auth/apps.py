@@ -17,11 +17,13 @@ class AuthConfig(AppConfig):
         def _blacklist(self):
             jti = self.get("jti")
             exp = self.get("exp")
-            rb.blacklist_jti(jti, exp)
+            schema = self.get("schema")
+            rb.blacklist_jti(jti, exp, schema)
 
         def _check(self):
             jti = self.get("jti")
-            if rb.is_jti_blacklisted(jti):
+            schema = self.get("schema")
+            if rb.is_jti_blacklisted(jti, schema):
                 raise TokenError("Token is blacklisted")
 
         RefreshToken.outstanding      = _outstanding
