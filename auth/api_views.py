@@ -421,8 +421,8 @@ class AuthViewSet(viewsets.GenericViewSet):
 
         return Response({"available": True}, status=status.HTTP_200_OK)
 
+    @method_decorator(csrf_exempt)
     @action(detail=False, methods=["post"], permission_classes=[AllowAny, DoubleSubmitCSRF], authentication_classes=[])
-    @csrf_exempt
     def create_tenant(self, request):
         raw = request.data.get("subdomain", "")
         sub = str(raw).strip().lower()
