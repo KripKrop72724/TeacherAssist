@@ -375,12 +375,13 @@ class RefreshFlowTests(TestCase):
             cls.user = get_user_model().objects.create_user(
                 username="bob", password="pass123", email="b@example.com"
             )
-            cls.rt = RefreshToken.for_user(cls.user)
 
     def setUp(self):
         self.client = TenantClient(
             self.tenant, HTTP_HOST=f"demo4.{settings.TENANT_SUBDOMAIN_BASE}"
         )
+        with tenant_context(self.tenant):
+            self.rt = RefreshToken.for_user(self.user)
 
     def _csrf(self):
         token = generate_csrf_token()
@@ -693,10 +694,21 @@ class TwoFactorTests(TestCase):
 
 
 class JWKSViewTests(TestCase):
-    def test_jwks_fetch(self):
+    def setUp(self):
         connection.set_schema_to_public()
+        self.public_tenant, _ = Tenant.objects.get_or_create(
+            schema_name="public", defaults={"name": "Public"}
+        )
+        Domain.objects.get_or_create(
+            tenant=self.public_tenant,
+            domain="testserver",
+            defaults={"is_primary": True},
+        )
         Path("public.pem").write_text(Path("public.pem").read_text())
-        resp = APIClient().get("/.well-known/jwks.json")
+        self.client = TenantClient(self.public_tenant, HTTP_HOST="testserver")
+
+    def test_jwks_fetch(self):
+        resp = self.client.get("/.well-known/jwks.json")
         self.assertEqual(resp.status_code, 200)
         self.assertIn("keys", resp.json())
 
