@@ -382,8 +382,13 @@ class AuthViewSet(viewsets.GenericViewSet):
         try:
             rt = RefreshToken(token)
         except TokenError as e:
-            return Response({"error": _("Failed to blacklist token."), _("details"): _(str(e))},
-                            status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {
+                    "error": _("Failed to blacklist token."),
+                    "details": str(e),
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         blacklist_jti(rt["jti"], rt["exp"], request.tenant.schema_name)
 
         resp = Response({"detail": _("Logged out.")}, status=status.HTTP_200_OK)
