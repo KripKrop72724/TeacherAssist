@@ -428,11 +428,14 @@ class RefreshFlowTests(TestCase):
             HTTP_X_CSRFTOKEN=token,
         )
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
+
+        new_token = self.client.cookies[settings.CSRF_COOKIE_NAME].value
+
         resp = self.client.post(
             "/auth/refresh/",
             {"refresh": str(self.rt)},
             format="json",
-            HTTP_X_CSRFTOKEN=token,
+            HTTP_X_CSRFTOKEN=new_token,
         )
         self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)
 
