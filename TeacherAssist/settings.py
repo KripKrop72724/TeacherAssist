@@ -53,6 +53,8 @@ TENANT_CREATION_THROTTLE_ENABLED  = env.bool("TENANT_CREATION_THROTTLE_ENABLED",
 TENANT_CHECK_THROTTLE_ENABLED     = env.bool("TENANT_CHECK_THROTTLE_ENABLED",     default=True)
 REGISTER_THROTTLE_ENABLED         = env.bool("REGISTER_THROTTLE_ENABLED",         default=True)
 SITE_NAME                         = env.str( "SITE_NAME",              default="TeacherAssist")
+RECAPTCHA_SECRET_KEY              = env.str("RECAPTCHA_SECRET_KEY")
+RECAPTCHA_SITE_KEY                = env.str("RECAPTCHA_SITE_KEY")
 
 SHARED_APPS = [
     "django_tenants",
