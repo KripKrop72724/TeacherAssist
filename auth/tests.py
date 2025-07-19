@@ -679,7 +679,8 @@ class TwoFactorTests(TestCase):
         req.COOKIES[settings.CSRF_COOKIE_NAME] = token
         force_authenticate(req, user=self.user)
         view = AuthViewSet.as_view({"post": "two_factor_enable"})
-        resp = view(req)
+        with tenant_context(self.tenant):
+            resp = view(req)
         self.assertEqual(resp.status_code, 200)
 
         otp2 = pyotp.TOTP(setup.data["secret"]).now()
@@ -692,7 +693,8 @@ class TwoFactorTests(TestCase):
         req2.COOKIES[settings.CSRF_COOKIE_NAME] = token
         force_authenticate(req2, user=self.user)
         view2 = AuthViewSet.as_view({"post": "two_factor_disable"})
-        resp2 = view2(req2)
+        with tenant_context(self.tenant):
+            resp2 = view2(req2)
         self.assertEqual(resp2.status_code, 200)
 
 
